@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
+#
+# Podman Quadlet unit: systemd runs pictorio-db as a service. For a rootless setup, copy this file to
+# ~/.config/containers/systemd/ and run:
+#
+#   systemctl --user daemon-reload
+#   systemctl --user start pictorio-db
+#
+# To start it at boot without logging in: loginctl enable-linger $USER
+
+[Unit]
+Description=pictorio-db image library server
+
+[Container]
+Image=localhost/pictorio-db:latest
+ContainerName=pictorio-db
+PublishPort=8737:8737
+
+# The container runs as UID 1000; this maps your user to it, so files it writes belong to you.
+UserNS=keep-id:uid=1000,gid=1000
+
+# The image has no curl; Python's urllib does the same.
+HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8737/api/v1/server/info', timeout=5)"
+HealthInterval=1m
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
