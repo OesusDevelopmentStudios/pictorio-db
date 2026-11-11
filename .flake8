@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
+#
+# flake8 cannot read pyproject.toml, so its settings live here.
+
+[flake8]
+max-line-length = 120
+exclude = .git,.venv,build

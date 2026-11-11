@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
+
+[build-system]
+requires = ["setuptools>=77"]  # 77: SPDX license expression in [project]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pictorio-db"
+version = "0.1.0"
+description = "Image library server for Pictorio: stores images, tags and thumbnails"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+
+# Exact versions, so every installation runs the code that was tested.
+dependencies = [
+    "fastapi==0.162.5",  # REST API, request/response models, OpenAPI schema
+    "uvicorn==0.54.0",   # ASGI server that runs the FastAPI app
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",  # tests
+    "httpx==0.28.1",  # required by FastAPI's TestClient
+    "flake8==7.5.0",  # style check
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,6 +1,15 @@
-# build artifacts
-pictorio-db
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
 build/
+dist/
 
-# vscode settings
+# Virtual environment
+.venv/
+
+# Test and tool caches
+.pytest_cache/
+
+# Editor settings
 .vscode/
