@@ -29,6 +29,27 @@ pytest
 flake8
 ```
 
+Run the server (in the virtual environment):
+
+```sh
+pictorio-db serve
+curl http://127.0.0.1:8737/api/v1/server/info
+```
+
+The interactive API documentation is at <http://127.0.0.1:8737/api/docs>.
+
+| Environment variable | Default | Meaning |
+|---|---|---|
+| `PICTORIO_HOST` | `127.0.0.1` | Address to listen on. `0.0.0.0` makes the server reachable from other computers |
+| `PICTORIO_PORT` | `8737` | Port to listen on |
+
+The API schema is committed as [docs/openapi.json](docs/openapi.json), and a test checks that it
+matches the code. After an intended API change, update it with:
+
+```sh
+pictorio-db openapi > docs/openapi.json
+```
+
 ## License
 
 GPL-3.0-or-later, see [LICENSE](LICENSE).

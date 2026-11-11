@@ -20,10 +20,13 @@ dependencies = [
     "uvicorn==0.54.0",   # ASGI server that runs the FastAPI app
 ]
 
+[project.scripts]
+pictorio-db = "pictorio_db.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest==9.2.0",  # tests
-    "httpx==0.28.1",  # required by FastAPI's TestClient
+    "httpx2==2.16.0",  # required by FastAPI's TestClient
     "flake8==7.5.0",  # style check
 ]
 

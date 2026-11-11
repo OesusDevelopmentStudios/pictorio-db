@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "pictorio-db",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/server/info": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Server name and versions (public)",
+        "operationId": "server_info_api_v1_server_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServerInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "api_version": {
+            "type": "integer",
+            "title": "Api Version"
+          },
+          "setup_required": {
+            "type": "boolean",
+            "title": "Setup Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "api_version",
+          "setup_required"
+        ],
+        "title": "ServerInfo"
+      }
+    }
+  }
+}
