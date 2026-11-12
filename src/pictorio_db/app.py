@@ -60,7 +60,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.storage.finish_interrupted_moves()  # before any request can touch the files
         app.state.storage.clean_incoming()  # uploads a restart interrupted
         app.state.thumbnails = ThumbnailsService(config.data_dir / "thumbnails")
-        app.state.images = ImagesService(database)
+        app.state.images = ImagesService(database, app.state.tags, app.state.storage)
         app.state.search = SearchService(database, app.state.tags.namespace_names)
         app.state.preferences = PreferencesService(database, app.state.tags.namespace_names)
         app.state.importer = ImporterService(

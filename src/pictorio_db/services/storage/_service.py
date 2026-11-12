@@ -6,7 +6,9 @@ import logging
 import os
 import shutil
 import uuid
+from collections import defaultdict
 from collections.abc import Callable, Collection
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from sqlalchemy import delete, select, update
@@ -15,7 +17,13 @@ from pictorio_db.db import Database
 from pictorio_db.db.models import FileMove, Image
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage._files import delete_file, move_file, partial_path, remove_empty_folders
-from pictorio_db.services.storage._paths import DEFAULT_PATH_TEMPLATE, PathTemplate, parse_path_template
+from pictorio_db.services.storage._paths import (
+    DEFAULT_PATH_TEMPLATE,
+    PathTemplate,
+    folder_path,
+    parse_path_template,
+)
+from pictorio_db.services.tags import TagName
 from pictorio_db.utils.time import utc_now
 
 PATH_TEMPLATE_SETTING = "path_template"
@@ -55,6 +63,29 @@ class StorageService:
         template = parse_path_template(text.strip(), self._namespace_names())
         self._settings.set(PATH_TEMPLATE_SETTING, template.text)
         return template
+
+    # --- Where images belong
+
+    def path_for(self, tags: list[TagName], taken_at: datetime, file_name: str) -> PurePosixPath:
+        """The place in the library that the path template gives an image with these tags."""
+        tags_by_namespace: defaultdict[str, list[str]] = defaultdict(list)
+        for tag in tags:
+            tags_by_namespace[tag.namespace].append(tag.name)
+
+        return folder_path(self.path_template(), tags_by_namespace, taken_at) / file_name
+
+    def move_to_layout(
+        self, image_id: int, current_path: PurePosixPath, tags: list[TagName], taken_at: datetime
+    ) -> PurePosixPath:
+        """Moves an image's file to where its tags now place it, keeping the file name, and returns the place.
+        Raises OSError if moving fails; the file then stays where the database says it is."""
+        wanted_path = self.path_for(tags, taken_at, current_path.name)
+        if wanted_path.parent == current_path.parent:
+            return current_path
+
+        new_path = self._free_library_path(wanted_path)
+        self.move_image_file(image_id, new_path)
+        return new_path
 
     # --- New files
 

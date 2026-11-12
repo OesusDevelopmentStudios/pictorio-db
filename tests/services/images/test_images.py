@@ -3,6 +3,7 @@
 
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from sqlalchemy import delete, func, select
@@ -11,7 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from pictorio_db.db import Database
 from pictorio_db.db.models import Tag, User
 from pictorio_db.services.images import ImagesService, NewImage
-from pictorio_db.services.tags import TagName
+from pictorio_db.services.settings import SettingsService
+from pictorio_db.services.storage import StorageService
+from pictorio_db.services.tags import TagName, TagsService
 from pictorio_db.utils.problems import Problem
 
 BEACH = NewImage(
@@ -30,8 +33,10 @@ BEACH = NewImage(
 
 
 @pytest.fixture
-def images(database: Database) -> ImagesService:
-    return ImagesService(database)
+def images(database: Database, tmp_path: Path) -> ImagesService:
+    tags = TagsService(database, lambda: storage.path_template_namespaces())
+    storage = StorageService(database, SettingsService(database), tmp_path / "library", tags.namespace_names)
+    return ImagesService(database, tags, storage)
 
 
 def another_image(number: int) -> NewImage:

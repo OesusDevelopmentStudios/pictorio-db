@@ -36,7 +36,7 @@ class Library:
         self.tags = TagsService(database, lambda: self.storage.path_template_namespaces())
         self.storage = StorageService(database, self.settings, self.library_dir, self.tags.namespace_names)
         self.thumbnails = ThumbnailsService(self.thumbnails_dir)
-        self.images = ImagesService(database)
+        self.images = ImagesService(database, self.tags, self.storage)
         self.importer = ImporterService(
             self.images, self.tags, self.storage, self.thumbnails, self.settings, now=lambda: IMPORT_TIME
         )

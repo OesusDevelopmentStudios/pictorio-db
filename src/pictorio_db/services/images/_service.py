@@ -1,16 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import PurePosixPath
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from pictorio_db.db import Database
 from pictorio_db.db.models import Image, Namespace, Tag, image_tag
-from pictorio_db.services.tags import TagName
+from pictorio_db.services.storage import StorageService
+from pictorio_db.services.tags import TagName, TagsService
 from pictorio_db.utils.problems import Problem
 from pictorio_db.utils.time import utc_now
 
@@ -49,11 +52,16 @@ class ImageRecord:
     tags: list[TagName]  # sorted by namespace, then name
 
 
-class ImagesService:
-    """Image records and their tags."""
+_logger = logging.getLogger(__name__)
 
-    def __init__(self, database: Database) -> None:
+
+class ImagesService:
+    """Image records and their tags. When a tag change affects an image's folder, its file is moved."""
+
+    def __init__(self, database: Database, tags: TagsService, storage: StorageService) -> None:
         self._database = database
+        self._tags = tags
+        self._storage = storage
 
     def get_image(self, image_id: int) -> ImageRecord:
         with self._database.session() as session:
@@ -73,6 +81,39 @@ class ImagesService:
                 for image_id in image_ids
                 if image_id in images
             ]
+
+    def change_tags(self, image_id: int, add_tags: list[str], remove_tags: list[str]) -> ImageRecord:
+        """Removes, then adds tags (unknown tags are created). In a single-value namespace an added tag replaces
+        the image's current one. If its folder changes, the file is moved before this returns.
+        Raises 404 not_found or 422 invalid_tag."""
+        self.change_tags_of_many([image_id], add_tags, remove_tags)
+        return self.get_image(image_id)
+
+    def change_tags_of_many(self, image_ids: list[int], add_tags: list[str], remove_tags: list[str]) -> int:
+        """The same change for several images, in one transaction: if anything fails, nothing changes. Files
+        are moved after the commit. Raises 404 not_found without saying which id is unknown."""
+        additions = self._tags.resolve_tags(add_tags)
+        removals = {self._tags.parse_tag(text) for text in remove_tags}
+        single_value = {namespace.name for namespace in self._tags.list_namespaces() if namespace.single_value}
+        unique_ids = list(dict.fromkeys(image_ids))
+        with self._database.session() as session:
+            images = session.scalars(select(Image).where(Image.id.in_(unique_ids))).all()
+            if len(images) != len(unique_ids):
+                raise Problem(404, "not_found", "Image not found", "One of the images does not exist.")
+
+            current_tags = _tags_of(session, unique_ids)
+            changed_ids = []
+            for image in images:
+                old_tags = current_tags.get(image.id, [])
+                new_tags = _tags_after_change(old_tags, additions, removals, single_value)
+                if set(new_tags) != set(old_tags):
+                    _replace_tags(session, image, old_tags, new_tags)
+                    changed_ids.append(image.id)
+
+            session.commit()
+
+        self._move_files_to_layout(changed_ids)
+        return len(unique_ids)
 
     def find_id_by_sha256(self, sha256: str) -> int | None:
         with self._database.session() as session:
@@ -101,6 +142,16 @@ class ImagesService:
             session.commit()
             return _record(session, image)
 
+    def _move_files_to_layout(self, image_ids: list[int]) -> None:
+        """After a tag change. A failed move leaves the file where the database says it is; it is logged, and
+        the tag change stays."""
+        for record in self.get_images(image_ids):
+            try:
+                current_path = PurePosixPath(record.storage_path)
+                self._storage.move_to_layout(record.id, current_path, record.tags, record.taken_at)
+            except OSError as error:
+                _logger.error("Could not move the file of image %s after a tag change: %s", record.id, error)
+
 
 def duplicate_image(sha256: str, existing_image_id: int | None) -> Problem:
     extra: dict[str, object] = {"sha256": sha256}
@@ -111,6 +162,35 @@ def duplicate_image(sha256: str, existing_image_id: int | None) -> Problem:
         409, "duplicate_image", "Image already exists", "An image with this SHA-256 is already in the library.",
         **extra,
     )
+
+
+def _tags_after_change(
+    current: list[TagName], additions: list[TagName], removals: set[TagName], single_value: set[str]
+) -> list[TagName]:
+    tags = [tag for tag in current if tag not in removals]
+    for added in additions:
+        if added.namespace in single_value:
+            tags = [tag for tag in tags if tag.namespace != added.namespace]
+
+        if added not in tags:
+            tags.append(added)
+
+    return tags
+
+
+def _replace_tags(session: Session, image: Image, old_tags: list[TagName], new_tags: list[TagName]) -> None:
+    removed = [tag for tag in old_tags if tag not in new_tags]
+    added = [tag for tag in new_tags if tag not in old_tags]
+    if removed:
+        removed_ids = _tag_ids(session, removed)
+        session.execute(
+            delete(image_tag).where(image_tag.c.image_id == image.id, image_tag.c.tag_id.in_(removed_ids))
+        )
+
+    for tag_id in _tag_ids(session, added):
+        session.execute(image_tag.insert().values(image_id=image.id, tag_id=tag_id))
+
+    session.execute(update(Image).where(Image.id == image.id).values(updated_at=utc_now()))
 
 
 def _tag_ids(session: Session, tags: list[TagName]) -> list[int]:

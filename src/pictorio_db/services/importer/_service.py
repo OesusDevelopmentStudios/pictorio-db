@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from pictorio_db.services.images import ImageRecord, ImagesService, NewImage, duplicate_image
 from pictorio_db.services.importer._inspection import ImageFacts, file_sha256, inspect_image
 from pictorio_db.services.settings import SettingsService
-from pictorio_db.services.storage import StorageService, file_name, folder_path
+from pictorio_db.services.storage import StorageService, file_name
 from pictorio_db.services.tags import TagName, TagsService
 from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import Problem
@@ -72,7 +71,9 @@ class ImporterService:
         415 unsupported_media_type, 422 checksum_mismatch or 422 invalid_tag; nothing is stored then."""
         sha256, tags, facts = self._checked_upload(incoming, metadata)
         taken_at = self._taken_at(metadata, facts)
-        library_path = self._library_path(metadata.original_filename, sha256, tags, facts, taken_at.time)
+        library_path = self._storage.path_for(
+            tags, taken_at.time, file_name(metadata.original_filename, sha256, facts.type.extension)
+        )
         stored_path = self._storage.store_incoming(incoming, library_path)
         new_image = self._new_image(metadata, sha256, facts, taken_at, stored_path, user_id)
         try:
@@ -107,16 +108,6 @@ class ImporterService:
             raise
 
         return sha256, tags, facts
-
-    def _library_path(
-        self, original_filename: str, sha256: str, tags: list[TagName], facts: ImageFacts, taken_at: datetime
-    ) -> PurePosixPath:
-        tags_by_namespace: defaultdict[str, list[str]] = defaultdict(list)
-        for tag in tags:
-            tags_by_namespace[tag.namespace].append(tag.name)
-
-        folder = folder_path(self._storage.path_template(), tags_by_namespace, taken_at)
-        return folder / file_name(original_filename, sha256, facts.type.extension)
 
     def _new_image(
         self,
