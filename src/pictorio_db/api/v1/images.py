@@ -65,6 +65,19 @@ class ImageList(BaseModel):
     effective_query: str = Field(description="The query with the hidden-by-default filters that were added")
 
 
+class TagChanges(BaseModel):
+    add_tags: list[str] = Field(default=[], max_length=200, examples=[["author:sample_artist"]])
+    remove_tags: list[str] = Field(default=[], max_length=200, examples=[["general:summer"]])
+
+
+class BulkTagChanges(TagChanges):
+    image_ids: list[int] = Field(min_length=1, max_length=1000)
+
+
+class BulkTagResult(BaseModel):
+    updated: int
+
+
 class UploadMetadataModel(BaseModel):
     original_filename: str = Field(min_length=1, max_length=255, examples=["IMG_2041.jpg"])
     file_mtime: datetime | None = Field(default=None, description="The original file's modification time")
@@ -143,6 +156,32 @@ async def upload_image(
     # Hashing and thumbnails take a while; the server keeps answering other requests meanwhile.
     record = await run_in_threadpool(importer.import_image, incoming, metadata, authentication.user.id)
     response.headers["Location"] = f"/api/v1/images/{record.id}"
+    return _image_object(record)
+
+
+@router.post(
+    "/bulk-tags",
+    summary="Change the tags of many images; all or nothing",
+    responses=problem_responses(401, 404, 422),
+)
+async def change_tags_of_many(
+    changes: BulkTagChanges, _user: CurrentAuthentication, images: ImagesServiceDependency
+) -> BulkTagResult:
+    updated = await run_in_threadpool(
+        images.change_tags_of_many, changes.image_ids, changes.add_tags, changes.remove_tags
+    )
+    return BulkTagResult(updated=updated)
+
+
+@router.patch(
+    "/{image_id}",
+    summary="Change an image's tags; a change to a folder-forming tag moves the file",
+    responses=problem_responses(401, 404, 422),
+)
+async def change_tags(
+    image_id: int, changes: TagChanges, _user: CurrentAuthentication, images: ImagesServiceDependency
+) -> ImageObject:
+    record = await run_in_threadpool(images.change_tags, image_id, changes.add_tags, changes.remove_tags)
     return _image_object(record)
 
 

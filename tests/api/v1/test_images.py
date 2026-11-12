@@ -314,3 +314,77 @@ def test_invalid_query_says_where(client: TestClient, headers: dict[str, str]) -
 @pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 501}, {"sort": "size"}, {"sort": "random"}])
 def test_invalid_search_parameters(client: TestClient, headers: dict[str, str], params: dict) -> None:
     assert client.get("/api/v1/images", params=params, headers=headers).status_code == 422
+
+
+# --- Changing tags
+
+def test_changing_tags_needs_a_login(client: TestClient) -> None:
+    assert client.patch("/api/v1/images/1", json={"add_tags": ["x"]}).status_code == 401
+    assert client.post("/api/v1/images/bulk-tags", json={"image_ids": [1], "add_tags": ["x"]}).status_code == 401
+
+
+def test_patch_adds_and_removes_tags(client: TestClient, headers: dict[str, str], uploaded: dict) -> None:
+    response = client.patch(
+        f"/api/v1/images/{uploaded['id']}", json={"add_tags": ["Sunset"], "remove_tags": ["summer"]}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tags"] == ["category:photo", "general:sunset"]
+
+
+def test_patch_moves_the_file_with_a_folder_forming_tag(
+    client: TestClient, headers: dict[str, str], uploaded: dict
+) -> None:
+    response = client.patch(
+        f"/api/v1/images/{uploaded['id']}", json={"add_tags": ["category:artwork"]}, headers=headers
+    )
+
+    assert response.json()["storage_path"].startswith("artwork/")
+    file_response = client.get(f"/api/v1/images/{uploaded['id']}/file", headers=headers)
+    assert file_response.content == uploaded["content"]
+
+
+@pytest.mark.parametrize(
+    ("path_id", "body", "status", "code"),
+    [
+        (None, {"add_tags": ["a|b"]}, 422, "invalid_tag"),
+        (999, {"add_tags": ["summer"]}, 404, "not_found"),
+    ],
+)
+def test_patch_refusals(
+    client: TestClient, headers: dict[str, str], uploaded: dict, path_id: int | None, body: dict, status: int, code: str
+) -> None:
+    response = client.patch(f"/api/v1/images/{path_id or uploaded['id']}", json=body, headers=headers)
+
+    assert (response.status_code, response.json()["code"]) == (status, code)
+
+
+def test_bulk_changes_every_image(client: TestClient, headers: dict[str, str]) -> None:
+    ids = [upload(client, headers, jpeg_bytes(colour=colour)).json()["id"] for colour in ("red", "green")]
+
+    body = {"image_ids": ids, "add_tags": ["album:trip"]}
+
+    response = client.post("/api/v1/images/bulk-tags", json=body, headers=headers)
+
+    assert response.json() == {"updated": 2}
+    for image_id in ids:
+        assert client.get(f"/api/v1/images/{image_id}", headers=headers).json()["tags"] == ["album:trip"]
+
+
+def test_bulk_with_an_unknown_id_changes_nothing(client: TestClient, headers: dict[str, str], uploaded: dict) -> None:
+    body = {"image_ids": [uploaded["id"], 999], "add_tags": ["album:trip"]}
+
+    response = client.post("/api/v1/images/bulk-tags", json=body, headers=headers)
+
+    assert response.status_code == 404
+    assert "album:trip" not in client.get(f"/api/v1/images/{uploaded['id']}", headers=headers).json()["tags"]
+
+
+@pytest.mark.parametrize("image_ids", [[], list(range(1, 1002))], ids=["none", "over 1000"])
+def test_bulk_takes_1_to_1000_images(client: TestClient, headers: dict[str, str], image_ids: list[int]) -> None:
+    body = {"image_ids": image_ids, "add_tags": ["x"]}
+
+    response = client.post("/api/v1/images/bulk-tags", json=body, headers=headers)
+
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["field"] == "body.image_ids"
