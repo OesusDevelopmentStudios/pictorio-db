@@ -4,7 +4,7 @@
 """Renaming, merging and deleting tags, with real files and the real worker."""
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -16,6 +16,7 @@ from pictorio_db.services.auth import AuthService, Role
 from pictorio_db.services.images import ImageRecord, ImagesService
 from pictorio_db.services.importer import ImporterService, UploadMetadata
 from pictorio_db.services.jobs import JobInfo, JobKind, JobsService, JobStatus, Relayout
+from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tag_admin import TagAdmin
@@ -34,10 +35,11 @@ class Library:
         thumbnails = ThumbnailsService(tmp_path / "thumbnails")
         self.importer = ImporterService(self.images, self.tags, self.storage, thumbnails, settings)
         self.access = AccessService(database, self.tags.namespace_names)
+        self.preferences = PreferencesService(database, self.tags.namespace_names)
         self.jobs = JobsService(database)
         relayout = Relayout(self.jobs, self.images)
         self.jobs.register(JobKind.RELAYOUT, relayout.run)
-        self.tag_admin = TagAdmin(self.tags, self.images, self.access, self.storage, relayout)
+        self.tag_admin = TagAdmin(self.tags, self.images, self.access, self.preferences, self.storage, relayout)
         auth = AuthService(database)
         self.admin = auth.create_user("apo", "correct horse battery", Role.ADMIN)
         self.kid = auth.create_user("kid", "correct horse battery", Role.USER)
@@ -185,33 +187,37 @@ def test_deleting_an_unknown_tag_is_not_found(library: Library) -> None:
     assert problem_of(lambda: library.delete("general:sunset")).status == 404
 
 
-# --- Restricted images stay hidden
+# --- Restrictions and hidden filters follow
 
-@pytest.fixture
-def nsfw_image(library: Library) -> ImageRecord:
+def test_restrictions_and_hidden_filters_follow_a_rename(library: Library) -> None:
+    library.tags.set_rating_values(["sfw", "nsfw", "explicit"])
+    library.access.set_restricted_terms(library.kid.id, ["rating:nsfw", "character:*"])
+    library.preferences.set_hidden_filters(library.kid.id, ["rating:nsfw|sfw", "beach"])
+    image = library.add_image("red", ("rating:nsfw",))
+
+    library.rename("rating:nsfw", "rating:explicit")
+
+    assert library.access.restricted_terms(library.kid.id) == ["character:*", "rating:explicit"]
+    assert library.preferences.hidden_filters(library.kid.id) == ["rating:explicit|rating:sfw", "beach"]
+    kid_restrictions = library.access.restrictions_for(library.kid)
+    assert not library.images.is_visible(image.id, kid_restrictions)  # still hidden from the kid
+
+
+def test_restrictions_and_hidden_filters_lose_a_deleted_tag(library: Library) -> None:
+    library.access.set_restricted_terms(library.kid.id, ["rating:nsfw", "category:photo,rating:nsfw", "character:*"])
+    library.preferences.set_hidden_filters(library.kid.id, ["rating:nsfw|sfw"])
+    image = library.add_image("red", ("rating:nsfw",))
+
+    library.delete("rating:nsfw")
+
+    assert library.access.restricted_terms(library.kid.id) == ["character:*"]
+    assert library.preferences.hidden_filters(library.kid.id) == ["rating:sfw"]
+    assert library.images.is_visible(image.id, library.access.restrictions_for(library.kid))  # expected
+
+
+def test_unknown_tag_leaves_the_lists_alone(library: Library) -> None:
     library.access.set_restricted_terms(library.kid.id, ["rating:nsfw"])
-    return library.add_image("red", ("rating:nsfw", "nude"))
 
+    problem_of(lambda: library.delete("rating:nsfw"))  # no image ever had it, so it does not exist
 
-@pytest.mark.parametrize(
-    "change",
-    [lambda library: library.delete("rating:nsfw"), lambda library: library.rename("rating:nsfw", "rating:sfw")],
-    ids=["delete", "rename"],
-)
-def test_change_that_would_reveal_restricted_images_is_refused(
-    library: Library, nsfw_image: ImageRecord, change: Callable[[Library], object]
-) -> None:
-    problem = problem_of(lambda: change(library))
-
-    assert (problem.status, problem.code, problem.extra["users"]) == (409, "would_reveal_restricted_images", ["kid"])
-    assert library.tags_of(nsfw_image) == ["general:nude", "rating:nsfw"]
-
-
-def test_change_that_keeps_restricted_images_hidden_is_allowed(library: Library, nsfw_image: ImageRecord) -> None:
-    safe = library.add_image("green", ("rating:sfw",))
-
-    library.rename("general:nude", "bare")  # rating:nsfw still hides the image
-    library.rename("rating:sfw", "rating:nsfw")  # hides more from the kid
-
-    assert library.tags_of(nsfw_image) == ["general:bare", "rating:nsfw"]
-    assert library.tags_of(safe) == ["rating:nsfw"]
+    assert library.access.restricted_terms(library.kid.id) == ["rating:nsfw"]

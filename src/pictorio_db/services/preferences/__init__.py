@@ -5,6 +5,8 @@
 
 from collections.abc import Callable, Collection
 
+from sqlalchemy import select
+
 from pictorio_db.db import Database
 from pictorio_db.db.models import UserPreferences
 from pictorio_db.services.search import MAX_TERMS, TERM_MAX_LENGTH, checked_terms
@@ -33,6 +35,17 @@ class PreferencesService:
             session.commit()
 
         return cleaned
+
+    def rewrite_hidden_filters(self, rewrite: Callable[[str], str | None]) -> None:
+        """After a tag rename or delete: every user's filters go through `rewrite`; None removes a filter."""
+        with self._database.session() as session:
+            for preferences in session.scalars(select(UserPreferences)):
+                rewritten = (new_filter for new_filter in map(rewrite, preferences.hidden_filters) if new_filter)
+                new_filters = list(dict.fromkeys(rewritten))
+                if new_filters != preferences.hidden_filters:
+                    preferences.hidden_filters = new_filters
+
+            session.commit()
 
 
 __all__ = ["HIDDEN_FILTER_MAX_LENGTH", "MAX_HIDDEN_FILTERS", "PreferencesService"]

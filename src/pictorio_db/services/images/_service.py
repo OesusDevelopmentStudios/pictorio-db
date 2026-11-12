@@ -133,10 +133,10 @@ class ImagesService:
         self._move_files_to_layout(changed_ids)
         return len(unique_ids)
 
-    def replace_tag(self, old_tag: TagName, new_tag: TagName | None, check: TagChangeCheck) -> list[int]:
+    def replace_tag(self, old_tag: TagName, new_tag: TagName | None) -> list[int]:
         """For admins: every image with old_tag gets new_tag instead (a rename, or a merge if new_tag exists), or
-        loses it if new_tag is None; then old_tag is deleted. In one transaction: if `check` raises, nothing
-        changes. Files are not moved: returns the ids of the changed images, for a relayout. Raises 404 not_found."""
+        loses it if new_tag is None; then old_tag is deleted. In one transaction. Files are not moved: returns the
+        ids of the changed images, for a relayout. Raises 404 not_found."""
         with self._database.session() as session:
             old_tag_id = session.scalar(
                 select(Tag.id)
@@ -150,7 +150,7 @@ class ImagesService:
             _tag_ids(session, additions)  # the new tag exists afterwards, even if no image had the old one
             tagged_ids = select(image_tag.c.image_id).where(image_tag.c.tag_id == old_tag_id)
             images = session.scalars(select(Image).where(Image.id.in_(tagged_ids))).all()
-            changed_ids = self._change_tags(session, images, tagged_ids, additions, {old_tag}, check)
+            changed_ids = self._change_tags(session, images, tagged_ids, additions, {old_tag}, _no_check)
             session.execute(delete(Tag).where(Tag.id == old_tag_id))
             session.commit()
 
@@ -253,6 +253,10 @@ def _tags_after_change(
             tags.append(added)
 
     return tags
+
+
+def _no_check(_old_tags: list[TagName], _new_tags: list[TagName], _taken_at: datetime) -> None:
+    """Admins are never restricted."""
 
 
 @dataclass(frozen=True)

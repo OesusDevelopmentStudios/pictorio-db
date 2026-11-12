@@ -58,7 +58,7 @@ class DeletedTag(BaseModel):
 @router.patch(
     "/{namespace}/{name}",
     summary="Rename a tag, or merge it into an existing one, on every image",
-    responses=problem_responses(401, 403, 404, 409, 422),
+    responses=problem_responses(401, 403, 404, 422),
 )
 def rename_tag(
     namespace: str, name: str, rename: TagRename, admin: CurrentAdmin, tag_admin: TagAdminDependency
@@ -70,7 +70,7 @@ def rename_tag(
 @router.delete(
     "/{namespace}/{name}",
     summary="Remove a tag from every image and delete it",
-    responses=problem_responses(401, 403, 404, 409),
+    responses=problem_responses(401, 403, 404),
 )
 def delete_tag(namespace: str, name: str, admin: CurrentAdmin, tag_admin: TagAdminDependency) -> DeletedTag:
     job = tag_admin.delete_tag(TagName(namespace, name), admin.user.id)

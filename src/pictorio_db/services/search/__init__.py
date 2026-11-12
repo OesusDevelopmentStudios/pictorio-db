@@ -15,6 +15,7 @@ from pictorio_db.services.search._parser import (
 )
 from pictorio_db.services.search._conditions import matching_condition
 from pictorio_db.services.search._hidden_filters import FilteredQuery, apply_hidden_filters, mentioned_tags
+from pictorio_db.services.search._rewrite import renamed_in_term, term_text, without_tag_in_term
 from pictorio_db.services.search._terms import MAX_TERMS, TERM_MAX_LENGTH, checked_terms, tree_matches
 from pictorio_db.services.search._service import (
     DEFAULT_LIMIT,
@@ -49,5 +50,8 @@ __all__ = [
     "matching_condition",
     "mentioned_tags",
     "parse_query",
+    "renamed_in_term",
+    "term_text",
     "tree_matches",
+    "without_tag_in_term",
 ]

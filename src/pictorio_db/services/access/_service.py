@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import ColumnElement, and_, delete, not_, select, true
 
 from pictorio_db.db import Database
-from pictorio_db.db.models import User, UserRestriction
+from pictorio_db.db.models import UserRestriction
 from pictorio_db.services.auth import Role, UserInfo
 from pictorio_db.services.search import (
     All,
@@ -91,23 +91,20 @@ class AccessService:
 
         return cleaned
 
-    def restricted_users(self) -> dict[str, Restrictions]:
-        """Every user whose restrictions are in effect, by username."""
-        query = (
-            select(User.username, UserRestriction.term)
-            .join(User, User.id == UserRestriction.user_id)
-            .where(User.role == Role.USER)
-        )
-        terms_by_user: dict[str, list[str]] = {}
+    def rewrite_restricted_terms(self, rewrite: Callable[[str], str | None]) -> None:
+        """After a tag rename or delete: every user's terms go through `rewrite`; None removes a term."""
+        terms_by_user: dict[int, list[str]] = {}
         with self._database.session() as session:
-            for username, term in session.execute(query):
-                terms_by_user.setdefault(username, []).append(term)
+            for restriction in session.scalars(select(UserRestriction)):
+                terms_by_user.setdefault(restriction.user_id, []).append(restriction.term)
 
-        namespace_names = self._namespace_names()
-        return {
-            username: Restrictions([parse_query(term, namespace_names) for term in terms])
-            for username, terms in terms_by_user.items()
-        }
+            for user_id, terms in terms_by_user.items():
+                new_terms = sorted({new_term for new_term in map(rewrite, terms) if new_term is not None})
+                if new_terms != sorted(terms):
+                    session.execute(delete(UserRestriction).where(UserRestriction.user_id == user_id))
+                    session.add_all(UserRestriction(user_id=user_id, term=term) for term in new_terms)
+
+            session.commit()
 
     def restrictions_for(self, user: UserInfo) -> Restrictions:
         """Read at each request, so a change applies at once. Admins are never restricted."""

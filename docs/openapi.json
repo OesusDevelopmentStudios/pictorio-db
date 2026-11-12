@@ -1033,16 +1033,6 @@
             },
             "description": "Problem details (RFC 9457)"
           },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemModel"
-                }
-              }
-            },
-            "description": "Problem details (RFC 9457)"
-          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -1118,16 +1108,6 @@
             "description": "Problem details (RFC 9457)"
           },
           "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemModel"
-                }
-              }
-            },
-            "description": "Problem details (RFC 9457)"
-          },
-          "409": {
             "content": {
               "application/problem+json": {
                 "schema": {

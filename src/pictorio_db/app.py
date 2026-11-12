@@ -79,7 +79,9 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.server_settings = ServerSettings(
             app.state.storage, app.state.importer, app.state.tags, relayout, config.import_dir
         )
-        app.state.tag_admin = TagAdmin(app.state.tags, app.state.images, app.state.access, app.state.storage, relayout)
+        app.state.tag_admin = TagAdmin(
+            app.state.tags, app.state.images, app.state.access, app.state.preferences, app.state.storage, relayout
+        )
         app.state.jobs.start()
         _announce_setup_code(app.state.auth)
         yield

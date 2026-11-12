@@ -7,8 +7,7 @@ from pictorio_db.services.images._service import (
     ImageRecord,
     ImagesService,
     NewImage,
-    TagChangeCheck,
     duplicate_image,
 )
 
-__all__ = ["ImageRecord", "ImagesService", "NewImage", "TagChangeCheck", "duplicate_image"]
+__all__ = ["ImageRecord", "ImagesService", "NewImage", "duplicate_image"]
