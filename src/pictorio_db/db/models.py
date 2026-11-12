@@ -21,10 +21,12 @@ NAMING_CONVENTION = {
 NAMESPACE_NAME_MAX_LENGTH = 32
 USERNAME_MAX_LENGTH = 32
 ROLES = ("admin", "user")
+JOB_STATUSES = ("queued", "running", "done", "failed")
 TAG_NAME_MAX_LENGTH = 100
 TAKEN_AT_SOURCES = ("exif", "file_mtime", "import_time")
 _TAKEN_AT_SOURCES_SQL = ", ".join(f"'{source}'" for source in TAKEN_AT_SOURCES)
 _ROLES_SQL = ", ".join(f"'{role}'" for role in ROLES)
+_JOB_STATUSES_SQL = ", ".join(f"'{status}'" for status in JOB_STATUSES)
 
 
 class Base(DeclarativeBase):
@@ -146,3 +148,25 @@ class UserRestriction(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
     term: Mapped[str] = mapped_column(primary_key=True)
+
+
+class Job(Base):
+    """A long task run by the background worker: a folder import, a re-layout of the library..."""
+
+    __tablename__ = "job"
+    __table_args__ = (
+        CheckConstraint(f"status IN ({_JOB_STATUSES_SQL})", name="status"),
+        Index(None, "status", "id"),  # the worker takes the oldest queued job
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str]
+    status: Mapped[str]  # one of JOB_STATUSES
+    params: Mapped[dict[str, Any]] = mapped_column(JSON)
+    progress_done: Mapped[int]
+    progress_total: Mapped[int | None]  # None while unknown
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON)  # kind-specific counts, once done
+    error: Mapped[str | None]
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime]  # UTC
+    finished_at: Mapped[datetime | None]  # UTC

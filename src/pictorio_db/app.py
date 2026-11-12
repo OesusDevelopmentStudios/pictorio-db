@@ -20,6 +20,7 @@ from pictorio_db.services.auth import AuthService
 from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
 from pictorio_db.services.images import ImagesService
+from pictorio_db.services.jobs import JobsService
 from pictorio_db.services.importer import ImporterService
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
@@ -68,8 +69,11 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.importer = ImporterService(
             app.state.images, app.state.tags, app.state.storage, app.state.thumbnails, settings
         )
+        app.state.jobs = JobsService(database)
+        app.state.jobs.start()
         _announce_setup_code(app.state.auth)
         yield
+        app.state.jobs.stop()  # the running job stops after its current item
         database.close()
 
     return lifespan

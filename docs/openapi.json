@@ -1230,6 +1230,141 @@
         ]
       }
     },
+    "/api/v1/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Your latest jobs, newest first, at most 100; admins see everyone's",
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobDetails"
+                  },
+                  "title": "Response List Jobs Api V1 Jobs Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "One job and its progress",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/users": {
       "get": {
         "tags": [
@@ -1867,6 +2002,132 @@
           "links"
         ],
         "title": "ImageObject"
+      },
+      "JobDetails": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "What the job was asked to do; depends on its kind"
+          },
+          "progress_done": {
+            "type": "integer",
+            "title": "Progress Done"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total",
+            "description": "null while the job does not know yet"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "Counts of what was done, once the job is done"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Why the job failed, once it has"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By",
+            "description": "The user who started the job; null for the server itself"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "params",
+          "progress_done",
+          "progress_total",
+          "result",
+          "error",
+          "created_by",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "JobDetails"
+      },
+      "JobKind": {
+        "type": "string",
+        "enum": [
+          "folder_import",
+          "relayout",
+          "tag_rename",
+          "tag_delete",
+          "rebuild_thumbnails"
+        ],
+        "title": "JobKind"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "JobStatus"
       },
       "LoginRequest": {
         "properties": {
