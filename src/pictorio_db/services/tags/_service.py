@@ -98,6 +98,15 @@ class TagsService:
         namespace, name = split_tag(text, self.namespace_names())
         return TagName(namespace, normalized_tag_name(name))
 
+    def tag_exists(self, tag: TagName) -> bool:
+        query = (
+            select(Tag.id)
+            .join(Namespace, Tag.namespace_id == Namespace.id)
+            .where(Namespace.name == tag.namespace, Tag.name == tag.name)
+        )
+        with self._database.session() as session:
+            return session.scalar(query) is not None
+
     def autocomplete(
         self,
         prefix: str = "",

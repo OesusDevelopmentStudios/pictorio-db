@@ -194,3 +194,13 @@ def test_hides_restricted_tags_from_autocomplete(
     user_restrictions = restrictions(access, users["kid"], ["rating:nsfw", "character:*", "general:nude,photo"])
 
     assert user_restrictions.is_tag_hidden(tags(tag)[0]) is hidden
+
+
+def test_lists_the_users_whose_restrictions_apply(access: AccessService, users: dict[str, UserInfo]) -> None:
+    access.set_restricted_terms(users["kid"].id, ["rating:nsfw"])
+    access.set_restricted_terms(users["admin"].id, ["rating:nsfw"])  # an admin: never restricted
+
+    restricted = access.restricted_users()
+
+    assert list(restricted) == ["kid"]
+    assert not restricted["kid"].is_visible(tags("rating:nsfw"), None)

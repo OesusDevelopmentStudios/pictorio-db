@@ -18,7 +18,7 @@ from pictorio_db.services.auth import AuthService, Role, UserInfo
 from pictorio_db.services.jobs import JobContext, JobInfo, JobKind, JobsService, JobStatus
 from pictorio_db.utils.problems import Problem
 
-TEST_KIND = JobKind.REBUILD_THUMBNAILS  # any registered kind will do
+TEST_KIND = JobKind.RELAYOUT  # any kind will do; the tests register their own handlers
 
 
 @pytest.fixture
@@ -105,7 +105,7 @@ def test_unexpected_error_gives_a_trace_id_in_the_log(
 def test_job_without_handler_fails(jobs: JobsService, users: dict[str, UserInfo]) -> None:
     jobs.start()
 
-    finished = wait_until_finished(jobs, jobs.submit(JobKind.RELAYOUT, {}, None).id, users["admin"])
+    finished = wait_until_finished(jobs, jobs.submit(JobKind.FOLDER_IMPORT, {}, None).id, users["admin"])
 
     assert finished.status == JobStatus.FAILED
     assert "No handler" in finished.error

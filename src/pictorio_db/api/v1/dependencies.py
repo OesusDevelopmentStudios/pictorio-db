@@ -17,6 +17,7 @@ from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
 from pictorio_db.services.server_settings import ServerSettings
 from pictorio_db.services.storage import StorageService
+from pictorio_db.services.tag_admin import TagAdmin
 from pictorio_db.services.tags import TagsService
 from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import Problem
@@ -31,6 +32,10 @@ def access_service(request: Request) -> AccessService:
 
 def auth_service(request: Request) -> AuthService:
     return request.app.state.auth
+
+
+def tag_admin(request: Request) -> TagAdmin:
+    return request.app.state.tag_admin
 
 
 def tags_service(request: Request) -> TagsService:
@@ -103,6 +108,7 @@ def current_admin(authentication: Annotated[Authentication, Depends(current_auth
 AccessServiceDependency = Annotated[AccessService, Depends(access_service)]
 AuthServiceDependency = Annotated[AuthService, Depends(auth_service)]
 TagsServiceDependency = Annotated[TagsService, Depends(tags_service)]
+TagAdminDependency = Annotated[TagAdmin, Depends(tag_admin)]
 ImagesServiceDependency = Annotated[ImagesService, Depends(images_service)]
 ImporterServiceDependency = Annotated[ImporterService, Depends(importer_service)]
 JobsServiceDependency = Annotated[JobsService, Depends(jobs_service)]

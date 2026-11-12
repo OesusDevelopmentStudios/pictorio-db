@@ -3,6 +3,12 @@
 
 """Image records and the tags on them."""
 
-from pictorio_db.services.images._service import ImageRecord, ImagesService, NewImage, duplicate_image
+from pictorio_db.services.images._service import (
+    ImageRecord,
+    ImagesService,
+    NewImage,
+    TagChangeCheck,
+    duplicate_image,
+)
 
-__all__ = ["ImageRecord", "ImagesService", "NewImage", "duplicate_image"]
+__all__ = ["ImageRecord", "ImagesService", "NewImage", "TagChangeCheck", "duplicate_image"]

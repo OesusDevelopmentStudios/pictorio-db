@@ -11,18 +11,23 @@ _logger = logging.getLogger(__name__)
 
 
 class Relayout:
-    """Moves every image's file to where the path template places it, after the template changed. Images
-    imported or retagged meanwhile already follow the new template."""
+    """Moves image files to where the path template places them: every image's after the template changed, or
+    some images' after their tags changed. Images imported or retagged meanwhile already follow the template."""
 
     def __init__(self, jobs: JobsService, images: ImagesService) -> None:
         self._jobs = jobs
         self._images = images
 
-    def start(self, user_id: int | None) -> JobInfo:
-        return self._jobs.submit(JobKind.RELAYOUT, {}, user_id)
+    def start(self, user_id: int | None, image_ids: list[int] | None = None) -> JobInfo:
+        """None: all images."""
+        params = {} if image_ids is None else {"image_ids": image_ids}
+        return self._jobs.submit(JobKind.RELAYOUT, params, user_id)
 
     def run(self, context: JobContext) -> dict[str, Any]:
-        image_ids = self._images.all_image_ids()
+        image_ids = context.params.get("image_ids")
+        if image_ids is None:
+            image_ids = self._images.all_image_ids()
+
         moved = 0
         failed: list[dict[str, Any]] = []
         context.report_progress(0, len(image_ids))

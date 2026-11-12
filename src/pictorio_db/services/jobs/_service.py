@@ -29,9 +29,6 @@ _logger = logging.getLogger(__name__)
 class JobKind(StrEnum):
     FOLDER_IMPORT = "folder_import"
     RELAYOUT = "relayout"
-    TAG_RENAME = "tag_rename"
-    TAG_DELETE = "tag_delete"
-    REBUILD_THUMBNAILS = "rebuild_thumbnails"
 
 
 class JobStatus(StrEnum):

@@ -25,6 +25,7 @@ from pictorio_db.services.jobs import FolderImport, JobKind, JobsService, Relayo
 from pictorio_db.services.importer import ImporterService
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
+from pictorio_db.services.tag_admin import TagAdmin
 from pictorio_db.services.tags import TagsService
 from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import install_problem_handlers
@@ -78,6 +79,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.server_settings = ServerSettings(
             app.state.storage, app.state.importer, app.state.tags, relayout, config.import_dir
         )
+        app.state.tag_admin = TagAdmin(app.state.tags, app.state.images, app.state.access, app.state.storage, relayout)
         app.state.jobs.start()
         _announce_setup_code(app.state.auth)
         yield

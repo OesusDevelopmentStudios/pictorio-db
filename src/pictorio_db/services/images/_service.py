@@ -2,11 +2,12 @@
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import Select, and_, bindparam, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -52,6 +53,9 @@ class ImageRecord:
     imported_by_user_id: int | None
     tags: list[TagName]  # sorted by namespace, then name
 
+
+# Checks one image's tags before and after a change, and its date; raises a Problem to cancel the whole change.
+TagChangeCheck = Callable[[list[TagName], list[TagName], datetime], None]
 
 _logger = logging.getLogger(__name__)
 
@@ -112,7 +116,6 @@ class ImagesService:
         without saying which id, 403 tag_restricted if an image would become restricted, or 422 invalid_tag."""
         additions = self._tags.resolve_tags(add_tags)
         removals = {self._tags.parse_tag(text) for text in remove_tags}
-        single_value = {namespace.name for namespace in self._tags.list_namespaces() if namespace.single_value}
         unique_ids = list(dict.fromkeys(image_ids))
         with self._database.session() as session:
             images = session.scalars(
@@ -121,20 +124,37 @@ class ImagesService:
             if len(images) != len(unique_ids):
                 raise Problem(404, "not_found", "Image not found", "One of the images does not exist.")
 
-            current_tags = _tags_of(session, unique_ids)
-            changed_ids = []
-            for image in images:
-                old_tags = current_tags.get(image.id, [])
-                new_tags = _tags_after_change(old_tags, additions, removals, single_value)
-                restrictions.check_tags_allowed(new_tags, image.taken_at)
-                if set(new_tags) != set(old_tags):
-                    _replace_tags(session, image, old_tags, new_tags)
-                    changed_ids.append(image.id)
+            def check(_old_tags: list[TagName], new_tags: list[TagName], taken_at: datetime) -> None:
+                restrictions.check_tags_allowed(new_tags, taken_at)
 
+            changed_ids = self._change_tags(session, images, unique_ids, additions, removals, check)
             session.commit()
 
         self._move_files_to_layout(changed_ids)
         return len(unique_ids)
+
+    def replace_tag(self, old_tag: TagName, new_tag: TagName | None, check: TagChangeCheck) -> list[int]:
+        """For admins: every image with old_tag gets new_tag instead (a rename, or a merge if new_tag exists), or
+        loses it if new_tag is None; then old_tag is deleted. In one transaction: if `check` raises, nothing
+        changes. Files are not moved: returns the ids of the changed images, for a relayout. Raises 404 not_found."""
+        with self._database.session() as session:
+            old_tag_id = session.scalar(
+                select(Tag.id)
+                .join(Namespace, Tag.namespace_id == Namespace.id)
+                .where(Namespace.name == old_tag.namespace, Tag.name == old_tag.name)
+            )
+            if old_tag_id is None:
+                raise Problem(404, "not_found", "Tag not found")
+
+            additions = [] if new_tag is None else [new_tag]
+            _tag_ids(session, additions)  # the new tag exists afterwards, even if no image had the old one
+            tagged_ids = select(image_tag.c.image_id).where(image_tag.c.tag_id == old_tag_id)
+            images = session.scalars(select(Image).where(Image.id.in_(tagged_ids))).all()
+            changed_ids = self._change_tags(session, images, tagged_ids, additions, {old_tag}, check)
+            session.execute(delete(Tag).where(Tag.id == old_tag_id))
+            session.commit()
+
+        return changed_ids
 
     def all_image_ids(self) -> list[int]:
         with self._database.session() as session:
@@ -174,6 +194,32 @@ class ImagesService:
             session.commit()
             return _record(session, image)
 
+    def _change_tags(
+        self,
+        session: Session,
+        images: Sequence[Image],
+        image_ids: list[int] | Select[tuple[int]],
+        additions: list[TagName],
+        removals: set[TagName],
+        check: TagChangeCheck,
+    ) -> list[int]:
+        """Removes, then adds tags; in a single-value namespace an added tag replaces the current one. Does not
+        commit. Returns the ids of the images whose tags changed."""
+        single_value = {namespace.name for namespace in self._tags.list_namespaces() if namespace.single_value}
+        current_tags = _tags_of(session, image_ids)
+        changes: list[_TagChange] = []
+        for image in images:
+            old_tags = current_tags.get(image.id, [])
+            new_tags = _tags_after_change(old_tags, additions, removals, single_value)
+            check(old_tags, new_tags, image.taken_at)
+            removed = [tag for tag in old_tags if tag not in new_tags]
+            change = _TagChange(image.id, removed, added=[tag for tag in new_tags if tag not in old_tags])
+            if change.removed or change.added:
+                changes.append(change)
+
+        _save_tag_changes(session, changes)
+        return [change.image_id for change in changes]
+
     def _move_files_to_layout(self, image_ids: list[int]) -> None:
         """After a tag change. A failed move leaves the file where the database says it is; it is logged, and
         the tag change stays."""
@@ -209,19 +255,38 @@ def _tags_after_change(
     return tags
 
 
-def _replace_tags(session: Session, image: Image, old_tags: list[TagName], new_tags: list[TagName]) -> None:
-    removed = [tag for tag in old_tags if tag not in new_tags]
-    added = [tag for tag in new_tags if tag not in old_tags]
-    if removed:
-        removed_ids = _tag_ids(session, removed)
-        session.execute(
-            delete(image_tag).where(image_tag.c.image_id == image.id, image_tag.c.tag_id.in_(removed_ids))
-        )
+@dataclass(frozen=True)
+class _TagChange:
+    image_id: int
+    removed: list[TagName]
+    added: list[TagName]
 
-    for tag_id in _tag_ids(session, added):
-        session.execute(image_tag.insert().values(image_id=image.id, tag_id=tag_id))
 
-    session.execute(update(Image).where(Image.id == image.id).values(updated_at=utc_now()))
+def _save_tag_changes(session: Session, changes: list[_TagChange]) -> None:
+    """In a few statements for all images, so that renaming a tag on thousands of images stays quick."""
+    if not changes:
+        return
+
+    tags = list(dict.fromkeys(tag for change in changes for tag in [*change.removed, *change.added]))
+    tag_ids = dict(zip(tags, _tag_ids(session, tags)))
+    links = image_tag.c
+    removed_links = [
+        {"link_image_id": change.image_id, "link_tag_id": tag_ids[tag]} for change in changes for tag in change.removed
+    ]
+    if removed_links:
+        is_link = and_(links.image_id == bindparam("link_image_id"), links.tag_id == bindparam("link_tag_id"))
+        session.execute(delete(image_tag).where(is_link), removed_links)
+
+    added_links = [{"image_id": change.image_id, "tag_id": tag_ids[tag]} for change in changes for tag in change.added]
+    if added_links:
+        session.execute(insert(image_tag), added_links)
+
+    # The images table itself, not the Image class: an ORM update would check every loaded Image object.
+    images = Image.__table__.c
+    session.execute(
+        update(Image.__table__).where(images.id == bindparam("changed_id")).values(updated_at=utc_now()),
+        [{"changed_id": change.image_id} for change in changes],
+    )
 
 
 def _tag_ids(session: Session, tags: list[TagName]) -> list[int]:
@@ -245,8 +310,9 @@ def _record(session: Session, image: Image) -> ImageRecord:
     return _record_with_tags(image, _tags_of(session, [image.id]).get(image.id, []))
 
 
-def _tags_of(session: Session, image_ids: list[int]) -> dict[int, list[TagName]]:
-    """The tags of each image, sorted by namespace, then name."""
+def _tags_of(session: Session, image_ids: list[int] | Select[tuple[int]]) -> dict[int, list[TagName]]:
+    """The tags of each image, sorted by namespace, then name. A query for the ids avoids SQLite's limit on the
+    number of values in one statement."""
     tag_rows = session.execute(
         select(image_tag.c.image_id, Namespace.name, Tag.name)
         .join(Tag, Tag.namespace_id == Namespace.id)

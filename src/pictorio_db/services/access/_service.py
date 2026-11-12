@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import ColumnElement, and_, delete, not_, select, true
 
 from pictorio_db.db import Database
-from pictorio_db.db.models import UserRestriction
+from pictorio_db.db.models import User, UserRestriction
 from pictorio_db.services.auth import Role, UserInfo
 from pictorio_db.services.search import (
     All,
@@ -90,6 +90,24 @@ class AccessService:
             session.commit()
 
         return cleaned
+
+    def restricted_users(self) -> dict[str, Restrictions]:
+        """Every user whose restrictions are in effect, by username."""
+        query = (
+            select(User.username, UserRestriction.term)
+            .join(User, User.id == UserRestriction.user_id)
+            .where(User.role == Role.USER)
+        )
+        terms_by_user: dict[str, list[str]] = {}
+        with self._database.session() as session:
+            for username, term in session.execute(query):
+                terms_by_user.setdefault(username, []).append(term)
+
+        namespace_names = self._namespace_names()
+        return {
+            username: Restrictions([parse_query(term, namespace_names) for term in terms])
+            for username, terms in terms_by_user.items()
+        }
 
     def restrictions_for(self, user: UserInfo) -> Restrictions:
         """Read at each request, so a change applies at once. Admins are never restricted."""

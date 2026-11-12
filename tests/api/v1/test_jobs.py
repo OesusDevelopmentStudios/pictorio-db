@@ -19,7 +19,7 @@ from pictorio_db.services.auth import Role
 from pictorio_db.services.jobs import JobContext, JobKind
 
 PASSWORD = "correct horse battery"
-TEST_KIND = JobKind.REBUILD_THUMBNAILS
+TEST_KIND = JobKind.RELAYOUT  # the tests replace its handler
 
 
 def log_in(client: TestClient, username: str, role: Role) -> tuple[dict[str, str], int]:

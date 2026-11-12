@@ -182,6 +182,16 @@ def check_autocomplete_hides(client: TestClient, setup: Setup) -> None:
     assert "rating:nsfw" not in [item["tag"] for item in response.json()["items"]]
 
 
+def expect_admins_only(method: str) -> Callable[[TestClient, Setup], None]:
+    def check(client: TestClient, setup: Setup) -> None:
+        body = {"new_tag": "rating:sfw"} if method == "PATCH" else None
+        response = client.request(method, "/api/v1/tags/rating/nsfw", json=body, headers=setup.kid)
+        assert response.status_code == 403
+        assert "rating:nsfw" in tags_of(client, setup, setup.nsfw_id)
+
+    return check
+
+
 # Every route that reads or changes images, and how it must treat a restricted image. A new image route
 # must be added here; test_every_image_route_is_checked fails until it is.
 ACCESS_RULES = {
@@ -193,6 +203,8 @@ ACCESS_RULES = {
     ("GET", "/api/v1/images/{image_id}/file"): expect_not_found("GET", "/api/v1/images/{image_id}/file"),
     ("GET", "/api/v1/images/{image_id}/thumbnail"): expect_not_found("GET", "/api/v1/images/{image_id}/thumbnail"),
     ("GET", "/api/v1/tags"): check_autocomplete_hides,
+    ("PATCH", "/api/v1/tags/{namespace}/{name}"): expect_admins_only("PATCH"),
+    ("DELETE", "/api/v1/tags/{namespace}/{name}"): expect_admins_only("DELETE"),
 }
 
 
