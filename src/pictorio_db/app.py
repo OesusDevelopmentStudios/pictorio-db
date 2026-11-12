@@ -16,18 +16,17 @@ from pictorio_db.api import v1
 from pictorio_db.config import Config
 from pictorio_db.db import DATABASE_FILE_NAME, open_database
 from pictorio_db.services.auth import AuthService
+from pictorio_db.services.settings import SettingsService
+from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagsService
 from pictorio_db.utils.problems import install_problem_handlers
 
-
 _logger = logging.getLogger(__name__)
-
-_PATH_TEMPLATE_NAMESPACES = frozenset({"category", "author"})
 
 
 def create_app(config: Config) -> FastAPI:
     """Creating the app touches no files; the database is opened when the server starts.
-    config.data_dir must exist by then."""
+    config.data_dir and config.library_dir must exist by then."""
     app = FastAPI(
         title="pictorio-db",
         version=pictorio_db.__version__,
@@ -49,7 +48,10 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         database = open_database(config.data_dir / DATABASE_FILE_NAME)
         app.state.database = database
         app.state.auth = AuthService(database)
-        app.state.tags = TagsService(database, lambda: _PATH_TEMPLATE_NAMESPACES)
+        settings = SettingsService(database)
+        # Tags and storage ask each other: which namespaces exist, which ones form folder names.
+        app.state.tags = TagsService(database, lambda: app.state.storage.path_template_namespaces())
+        app.state.storage = StorageService(settings, config.library_dir, app.state.tags.namespace_names)
         _announce_setup_code(app.state.auth)
         yield
         database.close()

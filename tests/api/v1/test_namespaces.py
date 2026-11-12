@@ -87,3 +87,15 @@ def test_builtin_namespace_is_in_use(client: TestClient, admin_headers: dict[str
     response = client.delete("/api/v1/namespaces/album", headers=admin_headers)
 
     assert (response.status_code, response.json()["code"]) == (409, "namespace_in_use")
+
+
+def test_in_path_template_follows_the_stored_template(client: TestClient, admin_headers: dict[str, str]) -> None:
+    client.post("/api/v1/namespaces", json={"name": "weather"}, headers=admin_headers)
+    client.app.state.storage.set_path_template("{weather}/{year}")
+
+    items = client.get("/api/v1/namespaces", headers=admin_headers).json()["items"]
+    deletion = client.delete("/api/v1/namespaces/weather", headers=admin_headers)
+
+    assert {item["name"] for item in items if item["in_path_template"]} == {"weather"}
+    assert deletion.status_code == 409
+    assert deletion.json()["detail"] == "The library's path template uses this namespace."

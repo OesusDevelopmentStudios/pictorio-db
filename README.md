@@ -47,10 +47,12 @@ The interactive API documentation is at <http://127.0.0.1:8737/api/docs>.
 | `PICTORIO_HOST` | `127.0.0.1` | Address to listen on. `0.0.0.0` makes the server reachable from other computers |
 | `PICTORIO_PORT` | `8737` | Port to listen on |
 | `PICTORIO_DATA_DIR` | `~/.local/share/pictorio-db` | Folder for the database. Created if missing |
+| `PICTORIO_LIBRARY_DIR` | `~/Pictures/pictorio-library` | Folder for the images, arranged by their tags. Created if missing |
 
-During development, point `PICTORIO_DATA_DIR` at a scratch folder to keep test data out of your home
-folder, e.g. `PICTORIO_DATA_DIR=/tmp/pictorio-dev pictorio-db serve`. The tests always use temporary
-folders of their own.
+During development, point `PICTORIO_DATA_DIR` and `PICTORIO_LIBRARY_DIR` at scratch folders to keep
+test data out of your home folder, e.g.
+`PICTORIO_DATA_DIR=/tmp/pictorio-dev/data PICTORIO_LIBRARY_DIR=/tmp/pictorio-dev/library pictorio-db serve`.
+The tests always use temporary folders of their own.
 
 The API schema is committed as [docs/openapi.json](docs/openapi.json), and a test checks that it
 matches the code. After an intended API change, update it with:
@@ -64,13 +66,16 @@ pictorio-db openapi > docs/openapi.json
 The [Containerfile](Containerfile) builds an image for amd64 or arm64 (64-bit Raspberry Pi):
 
 ```sh
+mkdir -p ~/Pictures/pictorio-library
 podman build -t pictorio-db .
-podman run -d --name pictorio-db -p 8737:8737 -v pictorio-data:/data pictorio-db
+podman run -d --name pictorio-db -p 8737:8737 \
+    -v pictorio-data:/data -v ~/Pictures/pictorio-library:/library:Z pictorio-db
 curl http://127.0.0.1:8737/api/v1/server/info
 ```
 
-The database is in the volume mounted at `/data` (here the named volume `pictorio-data`), so it is
-kept when the container is removed or the image is updated.
+The database is in the volume mounted at `/data` (here the named volume `pictorio-data`) and the
+images in the folder mounted at `/library`, so both are kept when the container is removed or the
+image is updated. `:Z` lets the container use the folder on systems with SELinux.
 
 On an amd64 PC, `podman build --platform linux/arm64 -t pictorio-db:arm64 .` builds the arm64 image;
 it needs QEMU's user-mode emulation (Fedora: `qemu-user-static-aarch64`). That build replaces the
@@ -85,7 +90,7 @@ The server in the container runs as user `pictorio` (UID 1000), not as root.
 building the image, as your normal user:
 
 ```sh
-mkdir -p ~/.config/containers/systemd
+mkdir -p ~/Pictures/pictorio-library ~/.config/containers/systemd
 cp deploy/pictorio-db.container ~/.config/containers/systemd/
 systemctl --user daemon-reload
 systemctl --user start pictorio-db

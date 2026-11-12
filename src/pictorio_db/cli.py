@@ -33,10 +33,11 @@ def main(arguments: list[str] | None = None) -> int:
 
 
 def _serve(config: Config) -> int:
-    try:
-        config.data_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        return _fail(f"cannot create the data folder {config.data_dir}: {error.strerror}")
+    for description, folder in (("data folder", config.data_dir), ("library folder", config.library_dir)):
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            return _fail(f"cannot create the {description} {folder}: {error.strerror}")
 
     # Our messages appear in the same style as Uvicorn's, e.g. "WARNING:  ..."
     logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(message)s")

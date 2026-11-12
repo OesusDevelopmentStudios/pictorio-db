@@ -21,6 +21,7 @@ class Config:
     host: str
     port: int
     data_dir: Path  # the database and, later, thumbnails; the container image sets /data
+    library_dir: Path  # the images, arranged by their tags; the container image sets /library
 
 
 def config_from_environment(environment: Mapping[str, str] = os.environ) -> Config:
@@ -28,6 +29,7 @@ def config_from_environment(environment: Mapping[str, str] = os.environ) -> Conf
         host=environment.get("PICTORIO_HOST", DEFAULT_HOST),
         port=_parse_port(environment.get("PICTORIO_PORT", str(DEFAULT_PORT))),
         data_dir=_data_dir(environment),
+        library_dir=_library_dir(environment),
     )
 
 
@@ -41,11 +43,25 @@ def _parse_port(text: str) -> int:
 # Without PICTORIO_DATA_DIR: ~/.local/share/pictorio-db, or the same under XDG_DATA_HOME if it is set.
 def _data_dir(environment: Mapping[str, str]) -> Path:
     if "PICTORIO_DATA_DIR" in environment:
-        if not environment["PICTORIO_DATA_DIR"]:
-            raise ConfigError("PICTORIO_DATA_DIR must not be empty")
+        return _folder_from(environment, "PICTORIO_DATA_DIR")
 
-        return Path(environment["PICTORIO_DATA_DIR"]).expanduser().absolute()
-
-    home = Path(environment.get("HOME", str(Path.home())))
-    data_home = Path(environment.get("XDG_DATA_HOME") or home / ".local" / "share")
+    data_home = Path(environment.get("XDG_DATA_HOME") or _home(environment) / ".local" / "share")
     return data_home / "pictorio-db"
+
+
+def _library_dir(environment: Mapping[str, str]) -> Path:
+    if "PICTORIO_LIBRARY_DIR" in environment:
+        return _folder_from(environment, "PICTORIO_LIBRARY_DIR")
+
+    return _home(environment) / "Pictures" / "pictorio-library"
+
+
+def _folder_from(environment: Mapping[str, str], variable: str) -> Path:
+    if not environment[variable]:
+        raise ConfigError(f"{variable} must not be empty")
+
+    return Path(environment[variable]).expanduser().absolute()
+
+
+def _home(environment: Mapping[str, str]) -> Path:
+    return Path(environment.get("HOME", str(Path.home())))

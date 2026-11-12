@@ -14,13 +14,16 @@ from pictorio_db.services.storage._paths import (
     folder_path,
     parse_path_template,
 )
+from pictorio_db.services.storage._service import PATH_TEMPLATE_SETTING, StorageService
 
 __all__ = [
     "DEFAULT_PATH_TEMPLATE",
+    "PATH_TEMPLATE_SETTING",
     "FOLDER_NAME_MAX_BYTES",
     "UNKNOWN_FOLDER",
     "VARIOUS_FOLDER",
     "PathTemplate",
+    "StorageService",
     "file_name",
     "folder_name",
     "folder_path",

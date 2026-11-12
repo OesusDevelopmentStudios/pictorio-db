@@ -4,7 +4,8 @@
 # Container image for pictorio-db (amd64 and arm64). Build and run:
 #
 #   podman build -t pictorio-db .
-#   podman run -d --name pictorio-db -p 8737:8737 -v pictorio-data:/data pictorio-db
+#   podman run -d --name pictorio-db -p 8737:8737 \
+#       -v pictorio-data:/data -v ~/Pictures/pictorio-library:/library:Z pictorio-db
 
 # The Debian release is named, so a rebuild does not switch the system underneath.
 FROM docker.io/library/python:3.14-slim-trixie
@@ -24,15 +25,17 @@ RUN pip install .
 # writes into mounted folders can belong to that user.
 RUN groupadd --gid 1000 pictorio \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin pictorio \
-    && mkdir /data \
-    && chown pictorio:pictorio /data
+    && mkdir /data /library \
+    && chown pictorio:pictorio /data /library
 USER pictorio
 
 # Listen on all interfaces inside the container; publish the port with -p 8737:8737.
-# Mount a volume at /data, or the database is lost when the container is removed.
+# Mount volumes at /data and /library, or the database and the images are lost when the container
+# is removed.
 ENV PICTORIO_HOST=0.0.0.0 \
     PICTORIO_PORT=8737 \
-    PICTORIO_DATA_DIR=/data
+    PICTORIO_DATA_DIR=/data \
+    PICTORIO_LIBRARY_DIR=/library
 EXPOSE 8737
 
 CMD ["pictorio-db", "serve"]

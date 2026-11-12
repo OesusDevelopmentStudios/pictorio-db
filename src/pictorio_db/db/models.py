@@ -4,8 +4,9 @@
 """Database tables. Schema changes are made only through migrations (db/migrations/versions/)."""
 
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, MetaData, String, Table, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Column, ForeignKey, Index, MetaData, String, Table, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Fixed constraint names, so that later migrations can refer to them.
@@ -106,3 +107,12 @@ class ApiToken(Base):
     device_name: Mapped[str]
     created_at: Mapped[datetime]  # UTC
     last_used_at: Mapped[datetime]  # UTC
+
+
+class Setting(Base):
+    """A server setting that the admin can change, e.g. the path template. Missing means the default."""
+
+    __tablename__ = "setting"
+
+    key: Mapped[str] = mapped_column(primary_key=True)
+    value: Mapped[Any] = mapped_column(JSON)
