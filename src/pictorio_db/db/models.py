@@ -18,9 +18,12 @@ NAMING_CONVENTION = {
 }
 
 NAMESPACE_NAME_MAX_LENGTH = 32
+USERNAME_MAX_LENGTH = 32
+ROLES = ("admin", "user")
 TAG_NAME_MAX_LENGTH = 100
 TAKEN_AT_SOURCES = ("exif", "file_mtime", "import_time")
 _TAKEN_AT_SOURCES_SQL = ", ".join(f"'{source}'" for source in TAKEN_AT_SOURCES)
+_ROLES_SQL = ", ".join(f"'{role}'" for role in ROLES)
 
 
 class Base(DeclarativeBase):
@@ -79,3 +82,27 @@ image_tag = Table(
     Column("tag_id", ForeignKey("tag.id"), primary_key=True),
     Index(None, "tag_id", "image_id"),  # finds the images with a tag
 )
+
+
+class User(Base):
+    __tablename__ = "user"
+    __table_args__ = (CheckConstraint(f"role IN ({_ROLES_SQL})", name="role"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH), unique=True)  # always lowercase
+    password_hash: Mapped[str]  # argon2id, in the PHC string format
+    role: Mapped[str]  # one of ROLES
+    created_at: Mapped[datetime]  # UTC
+
+
+class ApiToken(Base):
+    """A login of one device. Only the token's SHA-256 is stored, so the database leaks no usable token."""
+
+    __tablename__ = "api_token"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
+    token_sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    device_name: Mapped[str]
+    created_at: Mapped[datetime]  # UTC
+    last_used_at: Mapped[datetime]  # UTC

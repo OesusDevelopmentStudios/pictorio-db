@@ -20,6 +20,7 @@ dependencies = [
     "uvicorn==0.54.0",   # ASGI server that runs the FastAPI app
     "sqlalchemy==2.1.8",  # database access (SQLite)
     "alembic==1.20.1",    # database schema migrations
+    "argon2-cffi==25.1.0",  # password hashing (argon2id)
 ]
 
 [project.scripts]
