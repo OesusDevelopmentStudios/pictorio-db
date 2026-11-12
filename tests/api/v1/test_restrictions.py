@@ -7,6 +7,7 @@
 import io
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pytest
@@ -148,3 +149,67 @@ def test_bulk_change_with_a_restricted_image_changes_nothing(client: TestClient,
 
     assert response.status_code == 404
     assert "album:trip" not in tags_of(client, setup, setup.safe_id)
+
+
+# --- Every image endpoint, as a restricted user against a restricted image
+
+def expect_not_found(method: str, path: str) -> Callable[[TestClient, Setup], None]:
+    def check(client: TestClient, setup: Setup) -> None:
+        body = {"add_tags": ["beach"]} if method == "PATCH" else None
+        response = client.request(method, path.format(image_id=setup.nsfw_id), json=body, headers=setup.kid)
+        assert response.status_code == 404
+
+    return check
+
+
+def check_search_excludes(client: TestClient, setup: Setup) -> None:
+    assert setup.nsfw_id not in found(client, setup.kid, {"q": "summer", "apply_hidden_filters": False})[0]
+
+
+def check_upload_refuses(client: TestClient, setup: Setup) -> None:
+    assert upload(client, setup.kid, jpeg("blue"), ["rating:nsfw"]).status_code == 403
+    duplicate = upload(client, setup.kid, setup.nsfw_bytes, [])
+    assert duplicate.status_code == 409 and "existing_image_id" not in duplicate.json()
+
+
+def check_bulk_refuses(client: TestClient, setup: Setup) -> None:
+    body = {"image_ids": [setup.nsfw_id], "add_tags": ["beach"]}
+    assert client.post("/api/v1/images/bulk-tags", json=body, headers=setup.kid).status_code == 404
+
+
+def check_autocomplete_hides(client: TestClient, setup: Setup) -> None:
+    response = client.get("/api/v1/tags", params={"prefix": "rating:"}, headers=setup.kid)
+    assert "rating:nsfw" not in [item["tag"] for item in response.json()["items"]]
+
+
+# Every route that reads or changes images, and how it must treat a restricted image. A new image route
+# must be added here; test_every_image_route_is_checked fails until it is.
+ACCESS_RULES = {
+    ("GET", "/api/v1/images"): check_search_excludes,
+    ("POST", "/api/v1/images"): check_upload_refuses,
+    ("POST", "/api/v1/images/bulk-tags"): check_bulk_refuses,
+    ("GET", "/api/v1/images/{image_id}"): expect_not_found("GET", "/api/v1/images/{image_id}"),
+    ("PATCH", "/api/v1/images/{image_id}"): expect_not_found("PATCH", "/api/v1/images/{image_id}"),
+    ("GET", "/api/v1/images/{image_id}/file"): expect_not_found("GET", "/api/v1/images/{image_id}/file"),
+    ("GET", "/api/v1/images/{image_id}/thumbnail"): expect_not_found("GET", "/api/v1/images/{image_id}/thumbnail"),
+    ("GET", "/api/v1/tags"): check_autocomplete_hides,
+}
+
+
+@pytest.mark.parametrize("route", list(ACCESS_RULES), ids=[f"{method} {path}" for method, path in ACCESS_RULES])
+def test_restricted_image_stays_hidden_on_every_route(
+    client: TestClient, setup: Setup, route: tuple[str, str]
+) -> None:
+    ACCESS_RULES[route](client, setup)
+
+
+def test_every_image_route_is_checked(client: TestClient) -> None:
+    """Reads the routes from the API schema, which lists every REST route the app serves."""
+    image_routes = {
+        (method.upper(), path)
+        for path, operations in client.app.openapi()["paths"].items()
+        if path.startswith(("/api/v1/images", "/api/v1/tags"))
+        for method in operations
+    }
+
+    assert image_routes == set(ACCESS_RULES), "Add the new image route to ACCESS_RULES with its expected behaviour."
