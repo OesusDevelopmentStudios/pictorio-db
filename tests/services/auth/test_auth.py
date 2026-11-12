@@ -213,6 +213,39 @@ def test_cannot_revoke_another_users_token(auth: AuthService) -> None:
     auth.authenticate(kids_token.token)  # still valid
 
 
+def test_token_with_a_lifetime_expires(auth: AuthService, clock: TestClock) -> None:
+    auth.create_user("apo", PASSWORD, Role.ADMIN)
+    web_login = auth.create_token("apo", PASSWORD, "Web admin", lifetime=timedelta(hours=12))
+    device = auth.create_token("apo", PASSWORD, "laptop")
+
+    clock.advance(timedelta(hours=11, minutes=59))
+    auth.authenticate(web_login.token)
+    clock.advance(timedelta(minutes=1))
+
+    assert raised_problem(lambda: auth.authenticate(web_login.token)).status == 401
+    auth.authenticate(device.token)  # device tokens do not expire
+    assert web_login.info.expires_at == datetime(2026, 11, 13, 0, 0) and device.info.expires_at is None
+
+
+def test_expired_tokens_are_removed_at_the_next_login(auth: AuthService, clock: TestClock) -> None:
+    auth.create_user("apo", PASSWORD, Role.ADMIN)
+    auth.create_token("apo", PASSWORD, "Web admin", lifetime=timedelta(hours=12))
+    clock.advance(timedelta(hours=13))
+
+    new_login = auth.create_token("apo", PASSWORD, "Web admin", lifetime=timedelta(hours=12))
+
+    assert [token.id for token in auth.list_tokens(new_login.user.id)] == [new_login.info.id]
+
+
+def test_admins_only_login_refuses_other_users(auth: AuthService) -> None:
+    auth.create_user("kid", PASSWORD, Role.USER)
+
+    problem = raised_problem(lambda: auth.create_token("kid", PASSWORD, "Web admin", admins_only=True))
+
+    assert (problem.status, problem.code) == (403, "forbidden")
+    assert auth.list_tokens(auth.list_users()[0].id) == []
+
+
 # --- Too many failed logins
 
 def fail_logins(auth: AuthService, count: int) -> None:

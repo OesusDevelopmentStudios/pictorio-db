@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
 
-from sqlalchemy import Select, and_, bindparam, delete, insert, select, update
+from sqlalchemy import Select, and_, bindparam, delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -155,6 +155,10 @@ class ImagesService:
             session.commit()
 
         return changed_ids
+
+    def image_count(self) -> int:
+        with self._database.session() as session:
+            return session.scalar(select(func.count()).select_from(Image)) or 0
 
     def all_image_ids(self) -> list[int]:
         with self._database.session() as session:

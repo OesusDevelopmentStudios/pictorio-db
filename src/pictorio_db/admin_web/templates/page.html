@@ -1,0 +1,18 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+{# The layout of every page behind the login: the menu and the logout button. #}
+{% extends "base.html" %}
+{% block width %}wide{% endblock %}
+{% block nav %}
+<nav>
+    <a class="brand" href="/admin">pictorio-db</a>
+    {% for path, name in [("/admin", "Overview")] %}
+    <a href="{{ path }}"{% if request.url.path == path %} aria-current="page"{% endif %}>{{ name }}</a>
+    {% endfor %}
+    <form method="post" action="/admin/logout">
+        <span class="hint">{{ session.user.username }}</span>
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <button type="submit" class="secondary">Log out</button>
+    </form>
+</nav>
+{% endblock %}

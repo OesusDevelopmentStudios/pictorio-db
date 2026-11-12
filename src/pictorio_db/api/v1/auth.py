@@ -45,6 +45,7 @@ class DeviceToken(BaseModel):
     device_name: str
     created_at: datetime
     last_used_at: datetime
+    expires_at: datetime | None = Field(description="Web admin logins end; device tokens last until revoked")
     is_current: bool = Field(description="The token this request was sent with")
 
 
@@ -92,5 +93,6 @@ def _device_token(token: TokenInfo, current_token_id: int) -> DeviceToken:
         device_name=token.device_name,
         created_at=as_utc(token.created_at),
         last_used_at=as_utc(token.last_used_at),
+        expires_at=None if token.expires_at is None else as_utc(token.expires_at),
         is_current=token.id == current_token_id,
     )

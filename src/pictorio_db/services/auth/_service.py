@@ -3,7 +3,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from sqlalchemy import delete, func, select
@@ -40,6 +40,7 @@ class TokenInfo:
     device_name: str
     created_at: datetime
     last_used_at: datetime
+    expires_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -143,8 +144,16 @@ class AuthService:
 
     # --- Logins
 
-    def create_token(self, username: str, password: str, device_name: str) -> NewToken:
-        """Logs in one device. Wrong username and wrong password give the same answer."""
+    def create_token(
+        self,
+        username: str,
+        password: str,
+        device_name: str,
+        lifetime: timedelta | None = None,
+        admins_only: bool = False,
+    ) -> NewToken:
+        """Logs in one device; the token lasts until revoked, or for `lifetime`. Wrong username and wrong
+        password give the same answer. With admins_only, other users get 403 forbidden."""
         username = normalized_username(username)
         now = self._now()
         retry_after = self._login_attempts.seconds_until_allowed(username, now)
@@ -164,6 +173,9 @@ class AuthService:
                 raise not_authenticated()
 
             self._login_attempts.clear(username)
+            if admins_only and user.role != Role.ADMIN:
+                raise Problem(403, "forbidden", "Admins only", "This needs an admin account.")
+
             if needs_rehash(user.password_hash):
                 user.password_hash = hash_password(password)
 
@@ -174,21 +186,24 @@ class AuthService:
                 device_name=device_name,
                 created_at=now,
                 last_used_at=now,
+                expires_at=None if lifetime is None else now + lifetime,
             )
+            session.execute(delete(ApiToken).where(ApiToken.expires_at <= now))  # tidy up old web logins
             session.add(api_token)
             session.commit()
             return NewToken(token=token, info=_token_info(api_token), user=_user_info(user))
 
     def authenticate(self, token: str) -> Authentication:
-        """The user a token belongs to. Raises 401 for an unknown or revoked token."""
+        """The user a token belongs to. Raises 401 for an unknown, revoked or expired token."""
+        now = self._now()
         with self._database.session() as session:
             api_token = session.scalars(
                 select(ApiToken).where(ApiToken.token_sha256 == token_sha256(token))
             ).one_or_none()
-            if api_token is None:
+            if api_token is None or (api_token.expires_at is not None and api_token.expires_at <= now):
                 raise not_authenticated()
 
-            api_token.last_used_at = self._now()
+            api_token.last_used_at = now
             user = session.get_one(User, api_token.user_id)
             session.commit()
             return Authentication(user=_user_info(user), token_id=api_token.id)
@@ -253,4 +268,5 @@ def _token_info(api_token: ApiToken) -> TokenInfo:
         device_name=api_token.device_name,
         created_at=api_token.created_at,
         last_used_at=api_token.last_used_at,
+        expires_at=api_token.expires_at,
     )

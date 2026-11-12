@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% block head %}{% endblock %}
     <title>{% block title %}{% endblock %} – pictorio-db</title>
     <style>
         /* Dark design; color-scheme makes the browser draw its own controls dark too. */
@@ -20,32 +21,64 @@
             --error: #e5534b;
             --error-background: #3b1d1f;
             --error-text: #f5c6c3;
+            --success: #3fb950;
+            --success-background: #17301f;
+            --success-text: #b8e6c1;
         }
         body {
-            font-family: sans-serif; max-width: 28rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5;
+            font-family: sans-serif; margin: 0; line-height: 1.5;
             background: var(--background); color: var(--text);
         }
+        main { margin: 3rem auto; padding: 0 1rem; }
+        .narrow main { max-width: 28rem; }
+        .wide main { max-width: 64rem; margin-top: 2rem; }
         a { color: #7ab7ff; }
         code { background: var(--surface); padding: 0.1rem 0.3rem; border-radius: 3px; }
         label { display: block; margin-top: 1rem; }
-        input {
+        input, select, textarea {
             width: 100%; box-sizing: border-box; padding: 0.4rem; font-size: 1rem;
             background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
         }
-        input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+        textarea { font-family: monospace; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
         button {
             margin-top: 1.5rem; padding: 0.5rem 1.2rem; font-size: 1rem; cursor: pointer;
             background: var(--accent); color: var(--accent-text); border: none; border-radius: 4px;
         }
+        button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+        button.danger { background: var(--error); color: var(--accent-text); }
         .error {
             border-left: 4px solid var(--error); background: var(--error-background); color: var(--error-text);
             padding: 0.5rem 1rem;
         }
+        .success {
+            border-left: 4px solid var(--success); background: var(--success-background); color: var(--success-text);
+            padding: 0.5rem 1rem;
+        }
         .hint { color: var(--muted-text); font-size: 0.9rem; }
+        nav {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 1.2rem; padding: 0.6rem 1.5rem;
+            background: var(--surface); border-bottom: 1px solid var(--border);
+        }
+        nav .brand { font-weight: bold; color: var(--text); text-decoration: none; }
+        nav a { text-decoration: none; }
+        nav a[aria-current="page"] { color: var(--text); border-bottom: 2px solid var(--accent); }
+        nav form { margin-left: auto; display: flex; align-items: center; gap: 0.8rem; }
+        nav button { margin-top: 0; padding: 0.25rem 0.8rem; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted-text); font-weight: normal; }
+        dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1.5rem; }
+        dt { color: var(--muted-text); }
+        dd { margin: 0; }
     </style>
 </head>
-<body>
-    <h1>{% block heading %}{% endblock %}</h1>
-    {% block content %}{% endblock %}
+<body class="{% block width %}narrow{% endblock %}">
+    {% block nav %}{% endblock %}
+    <main>
+        <h1>{% block heading %}{% endblock %}</h1>
+        {% block content %}{% endblock %}
+    </main>
 </body>
 </html>

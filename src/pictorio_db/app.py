@@ -47,6 +47,7 @@ def create_app(config: Config) -> FastAPI:
     install_problem_handlers(app)  # every error is answered as RFC 9457 Problem Details
     app.include_router(v1.router)
     app.include_router(admin_web.router)
+    admin_web.install_page_handlers(app)  # logins and errors of the admin pages
     return app
 
 

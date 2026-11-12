@@ -1,0 +1,25 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block heading %}pictorio-db admin{% endblock %}
+{% block content %}
+{% if setup_required %}
+<p>No admin account exists yet. <a href="/admin/setup">Set up the server</a> first.</p>
+{% endif %}
+
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+
+<form method="post" action="/admin/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Username
+        <input name="username" required autocomplete="username" value="{{ username }}" autofocus>
+    </label>
+    <label>Password
+        <input name="password" type="password" required autocomplete="current-password">
+    </label>
+    <button type="submit">Log in</button>
+</form>
+{% endblock %}

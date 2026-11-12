@@ -1,0 +1,33 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+{% extends "page.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block content %}
+<dl>
+    <dt>Version</dt><dd>{{ version }}</dd>
+    <dt>Images</dt><dd>{{ image_count }}</dd>
+    <dt>Users</dt><dd>{{ user_count }}</dd>
+    <dt>Library folder</dt><dd><code>{{ settings.library_dir }}</code></dd>
+    <dt>Import folder</dt>
+    <dd>{% if settings.import_dir %}<code>{{ settings.import_dir }}</code>{% else %}not set: folder imports are off{% endif %}</dd>
+    <dt>Path template</dt><dd><code>{{ settings.path_template }}</code></dd>
+</dl>
+
+<h2>Latest jobs</h2>
+{% if recent_jobs %}
+<table>
+    <tr><th>Job</th><th>Kind</th><th>Status</th><th>Progress</th></tr>
+    {% for job in recent_jobs %}
+    <tr>
+        <td>{{ job.id }}</td>
+        <td>{{ job.kind }}</td>
+        <td>{{ job.status }}</td>
+        <td>{{ job.progress_done }}{% if job.progress_total is not none %} / {{ job.progress_total }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="hint">No jobs yet.</p>
+{% endif %}
+{% endblock %}

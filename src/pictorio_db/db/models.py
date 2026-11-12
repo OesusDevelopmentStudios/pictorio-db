@@ -110,6 +110,7 @@ class ApiToken(Base):
     device_name: Mapped[str]
     created_at: Mapped[datetime]  # UTC
     last_used_at: Mapped[datetime]  # UTC
+    expires_at: Mapped[datetime | None]  # UTC; None for device tokens, which last until revoked
 
 
 class Setting(Base):
