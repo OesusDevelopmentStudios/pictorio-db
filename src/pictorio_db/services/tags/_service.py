@@ -47,7 +47,7 @@ class TagsService:
         self._path_template_namespaces = path_template_namespaces
 
     def parse_tag(self, text: str) -> TagName:
-        """"Author:Polina Graff" → author:sample_artist. Raises 422 invalid_tag."""
+        """"Author:Sample Artist" → author:sample_artist. Raises 422 invalid_tag."""
         namespace, name = split_tag(text, self.namespace_names())
         return TagName(namespace, normalized_tag_name(name))
 
