@@ -12,6 +12,7 @@ from PIL import ExifTags, Image
 
 from pictorio_db.services.importer import file_sha256, inspect_image
 from pictorio_db.services.importer._inspection import _parse_utc_offset
+from pictorio_db.utils import image_limits
 from pictorio_db.utils.problems import Problem
 
 
@@ -173,3 +174,37 @@ def test_sha256_of_the_whole_file(tmp_path: Path) -> None:
     path.write_bytes(b"x" * 3_000_000)  # more than one read chunk
 
     assert file_sha256(path) == hashlib.sha256(b"x" * 3_000_000).hexdigest()
+
+
+# --- Size limits (lowered for the tests; real images that large would need too much memory)
+
+@pytest.fixture
+def small_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(image_limits, "OTHER_MAX_PIXELS", 1_000_000)
+    monkeypatch.setattr(image_limits, "JPEG_MAX_PIXELS", 5_000_000)
+
+
+@pytest.mark.usefixtures("small_limits")
+def test_refuses_images_over_their_formats_limit(tmp_path: Path) -> None:
+    problem = unsupported_problem(write_image(tmp_path / "big.png", "PNG", size=(1500, 1000)))
+
+    assert problem.title == "Image too large"
+    assert problem.detail == "The image is too large: 2 megapixels; at most 1 for PNG."
+
+
+@pytest.mark.usefixtures("small_limits")
+def test_jpegs_may_be_larger(tmp_path: Path) -> None:
+    facts = inspect_image(write_image(tmp_path / "big.jpg", "JPEG", size=(1500, 1000)))
+
+    assert (facts.width, facts.height) == (1500, 1000)
+
+
+@pytest.mark.usefixtures("small_limits")
+def test_refuses_jpegs_over_their_limit(tmp_path: Path) -> None:
+    problem = unsupported_problem(write_image(tmp_path / "huge.jpg", "JPEG", size=(3000, 2000)))
+
+    assert problem.detail == "The image is too large: 6 megapixels; at most 5 for JPEG."
+
+
+def test_pillow_accepts_jpegs_up_to_their_limit() -> None:
+    assert Image.MAX_IMAGE_PIXELS == image_limits.JPEG_MAX_PIXELS

@@ -19,6 +19,7 @@ from pictorio_db.services.auth import AuthService
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagsService
+from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import install_problem_handlers
 
 _logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.tags = TagsService(database, lambda: app.state.storage.path_template_namespaces())
         app.state.storage = StorageService(database, settings, config.library_dir, app.state.tags.namespace_names)
         app.state.storage.finish_interrupted_moves()  # before any request can touch the files
+        app.state.thumbnails = ThumbnailsService(config.data_dir / "thumbnails")
         _announce_setup_code(app.state.auth)
         yield
         database.close()

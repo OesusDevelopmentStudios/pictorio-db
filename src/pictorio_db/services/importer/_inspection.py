@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PIL import ExifTags, Image, UnidentifiedImageError
 
+from pictorio_db.utils.image_limits import max_pixels
 from pictorio_db.utils.problems import Problem
 
 
@@ -52,13 +53,17 @@ def inspect_image(path: Path) -> ImageFacts:
     """Raises 415 unsupported_media_type for files that are not a supported image."""
     try:
         with Image.open(path) as image:
-            image_type = SUPPORTED_TYPES.get(image.format or "")
+            image_format = image.format or ""
+            image_type = SUPPORTED_TYPES.get(image_format)
             if image_type is None:
-                raise _unsupported(Image.MIME.get(image.format or ""))
+                raise _unsupported(Image.MIME.get(image_format))
 
-            exif = image.getexif()
             width, height = image.size
-    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, SyntaxError, ValueError):
+            _check_pixel_count(width * height, image_format)
+            exif = image.getexif()
+    except Image.DecompressionBombError:
+        raise _too_large("The image is too large to process.") from None
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
         raise _unsupported(None) from None
 
     if exif.get(ExifTags.Base.Orientation) in _SIDEWAYS_ORIENTATIONS:
@@ -111,6 +116,18 @@ def _parse_utc_offset(value: object) -> int | None:
         return None
 
     return sign * (int(hours) * 60 + int(minutes))
+
+
+def _check_pixel_count(pixel_count: int, image_format: str) -> None:
+    limit = max_pixels(image_format)
+    if pixel_count > limit:
+        raise _too_large(
+            f"The image is too large: {pixel_count / 1e6:.0f} megapixels; at most {limit / 1e6:.0f} for {image_format}."
+        )
+
+
+def _too_large(detail: str) -> Problem:
+    return Problem(415, "unsupported_media_type", "Image too large", detail)
 
 
 def _unsupported(detected_type: str | None) -> Problem:
