@@ -9,7 +9,11 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from pictorio_db.services.auth import Authentication, AuthService, Role, not_authenticated
+from pictorio_db.services.images import ImagesService
+from pictorio_db.services.importer import ImporterService
+from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagsService
+from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import Problem
 
 # auto_error=False: a missing token is answered with our own 401 problem, not FastAPI's error.
@@ -22,6 +26,22 @@ def auth_service(request: Request) -> AuthService:
 
 def tags_service(request: Request) -> TagsService:
     return request.app.state.tags
+
+
+def images_service(request: Request) -> ImagesService:
+    return request.app.state.images
+
+
+def importer_service(request: Request) -> ImporterService:
+    return request.app.state.importer
+
+
+def storage_service(request: Request) -> StorageService:
+    return request.app.state.storage
+
+
+def thumbnails_service(request: Request) -> ThumbnailsService:
+    return request.app.state.thumbnails
 
 
 def current_authentication(
@@ -45,5 +65,9 @@ def current_admin(authentication: Annotated[Authentication, Depends(current_auth
 
 AuthServiceDependency = Annotated[AuthService, Depends(auth_service)]
 TagsServiceDependency = Annotated[TagsService, Depends(tags_service)]
+ImagesServiceDependency = Annotated[ImagesService, Depends(images_service)]
+ImporterServiceDependency = Annotated[ImporterService, Depends(importer_service)]
+StorageServiceDependency = Annotated[StorageService, Depends(storage_service)]
+ThumbnailsServiceDependency = Annotated[ThumbnailsService, Depends(thumbnails_service)]
 CurrentAuthentication = Annotated[Authentication, Depends(current_authentication)]
 CurrentAdmin = Annotated[Authentication, Depends(current_admin)]

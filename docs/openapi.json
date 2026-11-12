@@ -221,6 +221,321 @@
         }
       }
     },
+    "/api/v1/images": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Upload one image",
+        "operationId": "upload_image_api_v1_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The image"
+                  },
+                  "metadata": {
+                    "type": "string",
+                    "description": "JSON: original_filename, file_mtime?, client_sha256?, tags?",
+                    "example": "{\"original_filename\": \"IMG_2041.jpg\", \"tags\": [\"category:photo\", \"summer\"]}"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "file",
+                  "metadata"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "One image",
+        "operationId": "get_image_api_v1_images__image_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/file": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "The original image file; supports Range and If-None-Match",
+        "operationId": "get_image_file_api_v1_images__image_id__file_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/*": {}
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "A WebP thumbnail; the longest side is at most `size` pixels",
+        "operationId": "get_image_thumbnail_api_v1_images__image_id__thumbnail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Image Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                256,
+                1024
+              ],
+              "default": 256,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/webp": {}
+            }
+          },
+          "304": {
+            "description": "Not modified"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          }
+        }
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "tags": [
@@ -925,6 +1240,127 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImageLinks": {
+        "properties": {
+          "self": {
+            "type": "string",
+            "title": "Self"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "thumbnail": {
+            "type": "string",
+            "title": "Thumbnail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "self",
+          "file",
+          "thumbnail"
+        ],
+        "title": "ImageLinks"
+      },
+      "ImageObject": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "storage_path": {
+            "type": "string",
+            "title": "Storage Path",
+            "description": "Relative to the library folder"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width",
+            "description": "As the image is shown, after its EXIF orientation"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "file_size": {
+            "type": "integer",
+            "title": "File Size"
+          },
+          "taken_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Taken At",
+            "description": "Local wall-clock time, without a time zone"
+          },
+          "taken_at_source": {
+            "type": "string",
+            "enum": [
+              "exif",
+              "file_mtime",
+              "import_time"
+            ],
+            "title": "Taken At Source"
+          },
+          "imported_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Imported At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Sorted by namespace, then name",
+            "examples": [
+              [
+                "category:photo",
+                "general:summer"
+              ]
+            ]
+          },
+          "links": {
+            "$ref": "#/components/schemas/ImageLinks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sha256",
+          "original_filename",
+          "storage_path",
+          "mime_type",
+          "width",
+          "height",
+          "file_size",
+          "taken_at",
+          "taken_at_source",
+          "imported_at",
+          "updated_at",
+          "tags",
+          "links"
+        ],
+        "title": "ImageObject"
       },
       "LoginRequest": {
         "properties": {

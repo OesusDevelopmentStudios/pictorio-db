@@ -51,7 +51,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         database = open_database(config.data_dir / DATABASE_FILE_NAME)
         app.state.database = database
         app.state.auth = AuthService(database)
-        settings = SettingsService(database)
+        settings = app.state.settings = SettingsService(database)
         # Tags and storage ask each other: which namespaces exist, which ones form folder names.
         app.state.tags = TagsService(database, lambda: app.state.storage.path_template_namespaces())
         app.state.storage = StorageService(database, settings, config.library_dir, app.state.tags.namespace_names)
