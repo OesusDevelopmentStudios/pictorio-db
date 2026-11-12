@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
+import shutil
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -88,6 +89,22 @@ class ImporterService:
 
             raise
 
+    def import_copy(
+        self, source: Path, metadata: UploadMetadata, user_id: int | None, restrictions: Restrictions
+    ) -> ImageRecord:
+        """Imports a copy of `source` and leaves the file itself alone. Raises like import_image()."""
+        sha256 = file_sha256(source)
+        self._check_not_duplicate(sha256, restrictions)  # before copying: a repeated import is mostly duplicates
+        incoming = self.new_incoming_path()
+        try:
+            shutil.copyfile(source, incoming)
+        except Exception:
+            incoming.unlink(missing_ok=True)
+            raise
+
+        # The checksum finds a source that changed while it was copied.
+        return self.import_image(incoming, replace(metadata, client_sha256=sha256), user_id, restrictions)
+
     def _checked_upload(
         self, incoming: Path, metadata: UploadMetadata, restrictions: Restrictions
     ) -> tuple[str, list[TagName], ImageFacts, TakenAt]:
@@ -95,12 +112,7 @@ class ImporterService:
         try:
             sha256 = file_sha256(incoming)
             _check_client_sha256(metadata.client_sha256, sha256)
-            existing_image_id = self._images.find_id_by_sha256(sha256)
-            if existing_image_id is not None:
-                # The user has the file already; confirming a copy exists reveals little, but not which image.
-                visible = self._images.is_visible(existing_image_id, restrictions)
-                raise duplicate_image(sha256, existing_image_id if visible else None)
-
+            self._check_not_duplicate(sha256, restrictions)
             tags = self._tags.resolve_tags(list(metadata.tags))
             facts = inspect_image(incoming)
             taken_at = self._taken_at(metadata, facts)
@@ -117,6 +129,13 @@ class ImporterService:
             raise
 
         return sha256, tags, facts, taken_at
+
+    def _check_not_duplicate(self, sha256: str, restrictions: Restrictions) -> None:
+        existing_image_id = self._images.find_id_by_sha256(sha256)
+        if existing_image_id is not None:
+            # The user has the file already; confirming a copy exists reveals little, but not which image.
+            visible = self._images.is_visible(existing_image_id, restrictions)
+            raise duplicate_image(sha256, existing_image_id if visible else None)
 
     def _new_image(
         self,

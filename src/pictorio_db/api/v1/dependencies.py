@@ -12,7 +12,7 @@ from pictorio_db.services.access import AccessService, Restrictions
 from pictorio_db.services.auth import Authentication, AuthService, Role, not_authenticated
 from pictorio_db.services.images import ImagesService
 from pictorio_db.services.importer import ImporterService
-from pictorio_db.services.jobs import JobsService
+from pictorio_db.services.jobs import FolderImport, JobsService
 from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
 from pictorio_db.services.storage import StorageService
@@ -42,6 +42,10 @@ def images_service(request: Request) -> ImagesService:
 
 def importer_service(request: Request) -> ImporterService:
     return request.app.state.importer
+
+
+def folder_import(request: Request) -> FolderImport:
+    return request.app.state.folder_import
 
 
 def jobs_service(request: Request) -> JobsService:
@@ -97,6 +101,7 @@ TagsServiceDependency = Annotated[TagsService, Depends(tags_service)]
 ImagesServiceDependency = Annotated[ImagesService, Depends(images_service)]
 ImporterServiceDependency = Annotated[ImporterService, Depends(importer_service)]
 JobsServiceDependency = Annotated[JobsService, Depends(jobs_service)]
+FolderImportDependency = Annotated[FolderImport, Depends(folder_import)]
 PreferencesServiceDependency = Annotated[PreferencesService, Depends(preferences_service)]
 SearchServiceDependency = Annotated[SearchService, Depends(search_service)]
 StorageServiceDependency = Annotated[StorageService, Depends(storage_service)]

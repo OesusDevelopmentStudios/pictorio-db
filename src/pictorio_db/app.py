@@ -20,7 +20,7 @@ from pictorio_db.services.auth import AuthService
 from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
 from pictorio_db.services.images import ImagesService
-from pictorio_db.services.jobs import JobsService
+from pictorio_db.services.jobs import FolderImport, JobKind, JobsService
 from pictorio_db.services.importer import ImporterService
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
@@ -70,6 +70,8 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
             app.state.images, app.state.tags, app.state.storage, app.state.thumbnails, settings
         )
         app.state.jobs = JobsService(database)
+        app.state.folder_import = FolderImport(app.state.jobs, app.state.importer, app.state.tags, config.import_dir)
+        app.state.jobs.register(JobKind.FOLDER_IMPORT, app.state.folder_import.run)
         app.state.jobs.start()
         _announce_setup_code(app.state.auth)
         yield

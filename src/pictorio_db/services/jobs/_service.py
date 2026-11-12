@@ -64,8 +64,9 @@ class JobContext:
     """What a running job gets: its parameters, a way to report progress, and a way to notice that the server
     is stopping. Jobs call report_progress between items, so they stop between items, never inside one."""
 
-    def __init__(self, service: "JobsService", job_id: int, params: dict[str, Any]) -> None:
+    def __init__(self, service: "JobsService", job_id: int, params: dict[str, Any], created_by: int | None) -> None:
         self.params = params
+        self.created_by = created_by
         self._service = service
         self._job_id = job_id
         self._last_written = 0.0
@@ -176,7 +177,7 @@ class JobsService:
             if handler is None:
                 raise Problem(500, "unknown_job", "Unknown job", f"No handler for jobs of kind {job.kind!r}.")
 
-            result = handler(JobContext(self, job.id, job.params))
+            result = handler(JobContext(self, job.id, job.params, job.created_by))
         except StopRequested:
             self._requeue(job.id)  # run again after the next start
             return True

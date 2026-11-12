@@ -25,17 +25,18 @@ RUN pip install .
 # writes into mounted folders can belong to that user.
 RUN groupadd --gid 1000 pictorio \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin pictorio \
-    && mkdir /data /library \
-    && chown pictorio:pictorio /data /library
+    && mkdir /data /library /import \
+    && chown pictorio:pictorio /data /library /import
 USER pictorio
 
 # Listen on all interfaces inside the container; publish the port with -p 8737:8737.
 # Mount volumes at /data and /library, or the database and the images are lost when the container
-# is removed.
+# is removed. Folders to import from can be mounted at /import.
 ENV PICTORIO_HOST=0.0.0.0 \
     PICTORIO_PORT=8737 \
     PICTORIO_DATA_DIR=/data \
-    PICTORIO_LIBRARY_DIR=/library
+    PICTORIO_LIBRARY_DIR=/library \
+    PICTORIO_IMPORT_DIR=/import
 EXPOSE 8737
 
 CMD ["pictorio-db", "serve"]

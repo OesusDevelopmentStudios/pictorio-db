@@ -235,6 +235,45 @@ def test_removes_the_stored_file_when_recording_fails(library: Library, monkeypa
     assert [path.name for path in library.library_dir.iterdir()] == [".incoming"]  # empty folders removed too
 
 
+# --- Copies of files on the server, for folder imports
+
+def test_copy_leaves_the_source_alone(library: Library, tmp_path: Path) -> None:
+    source = tmp_path / "beach.jpg"
+    library.incoming_image().rename(source)
+    source_bytes = source.read_bytes()
+
+    record = library.importer.import_copy(source, UploadMetadata("beach.jpg"), None, NO_RESTRICTIONS)
+
+    assert source.read_bytes() == source_bytes
+    assert (library.library_dir / record.storage_path).read_bytes() == source_bytes
+    assert list((library.library_dir / ".incoming").iterdir()) == []
+
+
+def test_copy_of_a_duplicate_is_refused_before_copying(
+    library: Library, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = library.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
+    source = tmp_path / "again.jpg"
+    library.incoming_image().rename(source)
+    monkeypatch.setattr(library.importer, "new_incoming_path", lambda: pytest.fail("copied a duplicate"))
+
+    problem = refused(lambda: library.importer.import_copy(source, UploadMetadata("b.jpg"), None, NO_RESTRICTIONS))
+
+    assert (problem.code, problem.extra["existing_image_id"]) == ("duplicate_image", first.id)
+    assert source.exists()
+
+
+def test_copy_of_a_file_that_is_not_an_image_is_refused(library: Library, tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    source.write_text("not an image")
+
+    problem = refused(lambda: library.importer.import_copy(source, UploadMetadata("notes.txt"), None, NO_RESTRICTIONS))
+
+    assert problem.code == "unsupported_media_type"
+    assert source.exists()
+    library.assert_nothing_stored()
+
+
 # --- Settings and housekeeping
 
 def test_upload_limit_has_a_default_and_can_be_changed(library: Library) -> None:

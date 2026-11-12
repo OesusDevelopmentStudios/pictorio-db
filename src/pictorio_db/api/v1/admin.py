@@ -8,7 +8,12 @@ from datetime import datetime
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
-from pictorio_db.api.v1.dependencies import AccessServiceDependency, AuthServiceDependency, CurrentAdmin
+from pictorio_db.api.v1.dependencies import (
+    AccessServiceDependency,
+    AuthServiceDependency,
+    CurrentAdmin,
+    FolderImportDependency,
+)
 from pictorio_db.services.auth import PASSWORD_MAX_LENGTH, Role, UserInfo
 from pictorio_db.utils.problems import problem_responses
 from pictorio_db.utils.time import as_utc
@@ -94,6 +99,33 @@ def update_user(
 )
 def delete_user(user_id: int, _admin: CurrentAdmin, auth: AuthServiceDependency) -> None:
     auth.delete_user(user_id)
+
+
+class ImportRequest(BaseModel):
+    source_subdir: str = Field(
+        max_length=1000,
+        description="A folder inside the server's import folder (PICTORIO_IMPORT_DIR); '' for all of it",
+        examples=["phone_backup/2025"],
+    )
+    remove_originals: bool = Field(
+        default=False, description="Delete each file once it is in the library, or was there already"
+    )
+    tags: list[str] = Field(default=[], max_length=200, description="Given to every imported image")
+
+
+class StartedJob(BaseModel):
+    job_id: int = Field(description="Follow its progress at /api/v1/jobs/{job_id}")
+
+
+@router.post(
+    "/import-jobs",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Import a folder on the server, in the background",
+    responses=problem_responses(401, 403, 409, 422),
+)
+def start_import(request: ImportRequest, admin: CurrentAdmin, folder_import: FolderImportDependency) -> StartedJob:
+    job = folder_import.start(request.source_subdir, request.remove_originals, request.tags, admin.user.id)
+    return StartedJob(job_id=job.id)
 
 
 def _user_details(user: UserInfo, access: AccessServiceDependency) -> UserDetails:

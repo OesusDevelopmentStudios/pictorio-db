@@ -25,10 +25,11 @@ def test_reads_environment_variables() -> None:
         "PICTORIO_PORT": "9000",
         "PICTORIO_DATA_DIR": "/data",
         "PICTORIO_LIBRARY_DIR": "/library",
+        "PICTORIO_IMPORT_DIR": "/import",
     }
 
     assert config_from_environment(environment) == Config(
-        host="0.0.0.0", port=9000, data_dir=Path("/data"), library_dir=Path("/library")
+        host="0.0.0.0", port=9000, data_dir=Path("/data"), library_dir=Path("/library"), import_dir=Path("/import")
     )
 
 
@@ -38,7 +39,7 @@ def test_data_folder_follows_xdg_data_home() -> None:
     assert config_from_environment(environment).data_dir == Path("/home/user/data/pictorio-db")
 
 
-@pytest.mark.parametrize("variable", ["PICTORIO_DATA_DIR", "PICTORIO_LIBRARY_DIR"])
+@pytest.mark.parametrize("variable", ["PICTORIO_DATA_DIR", "PICTORIO_LIBRARY_DIR", "PICTORIO_IMPORT_DIR"])
 def test_rejects_empty_folders(variable: str) -> None:
     with pytest.raises(ConfigError, match=variable):
         config_from_environment(HOME | {variable: ""})

@@ -3,6 +3,7 @@
 
 """Long tasks run one at a time by a background worker: folder imports, re-layouts, tag renames."""
 
+from pictorio_db.services.jobs._folder_import import FolderImport
 from pictorio_db.services.jobs._service import (
     LIST_LIMIT,
     JobContext,
@@ -15,5 +16,13 @@ from pictorio_db.services.jobs._service import (
 )
 
 __all__ = [
-    "LIST_LIMIT", "JobContext", "JobHandler", "JobInfo", "JobKind", "JobStatus", "JobsService", "StopRequested",
+    "LIST_LIMIT",
+    "FolderImport",
+    "JobContext",
+    "JobHandler",
+    "JobInfo",
+    "JobKind",
+    "JobStatus",
+    "JobsService",
+    "StopRequested",
 ]

@@ -48,6 +48,7 @@ The interactive API documentation is at <http://127.0.0.1:8737/api/docs>.
 | `PICTORIO_PORT` | `8737` | Port to listen on |
 | `PICTORIO_DATA_DIR` | `~/.local/share/pictorio-db` | Folder for the database. Created if missing |
 | `PICTORIO_LIBRARY_DIR` | `~/Pictures/pictorio-library` | Folder for the images, arranged by their tags. Created if missing |
+| `PICTORIO_IMPORT_DIR` | not set | Folder that admins can import from with an import job, e.g. a NAS share. Unset: no folder imports |
 
 During development, point `PICTORIO_DATA_DIR` and `PICTORIO_LIBRARY_DIR` at scratch folders to keep
 test data out of your home folder, e.g.
@@ -76,6 +77,9 @@ curl http://127.0.0.1:8737/api/v1/server/info
 The database is in the volume mounted at `/data` (here the named volume `pictorio-data`) and the
 images in the folder mounted at `/library`, so both are kept when the container is removed or the
 image is updated. `:Z` lets the container use the folder on systems with SELinux.
+
+To import folders that are already on the server, mount them at `/import`, e.g.
+`-v /srv/photos-inbox:/import:ro,Z`. Mount it without `ro` if the import should remove the originals.
 
 On an amd64 PC, `podman build --platform linux/arm64 -t pictorio-db:arm64 .` builds the arm64 image;
 it needs QEMU's user-mode emulation (Fedora: `qemu-user-static-aarch64`). That build replaces the

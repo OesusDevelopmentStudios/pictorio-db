@@ -22,6 +22,7 @@ class Config:
     port: int
     data_dir: Path  # the database and, later, thumbnails; the container image sets /data
     library_dir: Path  # the images, arranged by their tags; the container image sets /library
+    import_dir: Path | None = None  # folders admins can import from on the server; the container sets /import
 
 
 def config_from_environment(environment: Mapping[str, str] = os.environ) -> Config:
@@ -30,6 +31,7 @@ def config_from_environment(environment: Mapping[str, str] = os.environ) -> Conf
         port=_parse_port(environment.get("PICTORIO_PORT", str(DEFAULT_PORT))),
         data_dir=_data_dir(environment),
         library_dir=_library_dir(environment),
+        import_dir=_import_dir(environment),
     )
 
 
@@ -54,6 +56,14 @@ def _library_dir(environment: Mapping[str, str]) -> Path:
         return _folder_from(environment, "PICTORIO_LIBRARY_DIR")
 
     return _home(environment) / "Pictures" / "pictorio-library"
+
+
+def _import_dir(environment: Mapping[str, str]) -> Path | None:
+    """Unset: folder imports are off."""
+    if "PICTORIO_IMPORT_DIR" in environment:
+        return _folder_from(environment, "PICTORIO_IMPORT_DIR")
+
+    return None
 
 
 def _folder_from(environment: Mapping[str, str], variable: str) -> Path:

@@ -1663,6 +1663,82 @@
           }
         }
       }
+    },
+    "/api/v1/admin/import-jobs": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Import a folder on the server, in the background",
+        "operationId": "start_import_api_v1_admin_import_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2002,6 +2078,40 @@
           "links"
         ],
         "title": "ImageObject"
+      },
+      "ImportRequest": {
+        "properties": {
+          "source_subdir": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Source Subdir",
+            "description": "A folder inside the server's import folder (PICTORIO_IMPORT_DIR); '' for all of it",
+            "examples": [
+              "phone_backup/2025"
+            ]
+          },
+          "remove_originals": {
+            "type": "boolean",
+            "title": "Remove Originals",
+            "description": "Delete each file once it is in the library, or was there already",
+            "default": false
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Tags",
+            "description": "Given to every imported image",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_subdir"
+        ],
+        "title": "ImportRequest"
       },
       "JobDetails": {
         "properties": {
@@ -2379,6 +2489,20 @@
           "random"
         ],
         "title": "Sort"
+      },
+      "StartedJob": {
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id",
+            "description": "Follow its progress at /api/v1/jobs/{job_id}"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "StartedJob"
       },
       "TagChanges": {
         "properties": {

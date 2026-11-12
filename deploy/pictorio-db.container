@@ -24,6 +24,9 @@ Volume=pictorio-data:/data
 # :Z lets the container use it on systems with SELinux.
 Volume=%h/Pictures/pictorio-library:/library:Z
 
+# Optional: a folder that admins can import from. Without ro, an import can remove the originals.
+#Volume=/srv/photos-inbox:/import:ro,Z
+
 # The container runs as UID 1000; this maps your user to it, so files it writes belong to you.
 UserNS=keep-id:uid=1000,gid=1000
 
