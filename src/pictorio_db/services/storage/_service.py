@@ -58,9 +58,14 @@ class StorageService:
     def path_template_namespaces(self) -> frozenset[str]:
         return self.path_template().namespaces
 
+    def checked_path_template(self, text: str) -> PathTemplate:
+        """Raises 422 validation_error, e.g. for an unknown placeholder."""
+        return parse_path_template(text.strip(), self._namespace_names())
+
     def set_path_template(self, text: str) -> PathTemplate:
-        """Checks and stores the template. Raises 422 validation_error; the stored one then stays."""
-        template = parse_path_template(text.strip(), self._namespace_names())
+        """Checks and stores the template; files are not moved. Raises 422 validation_error; the stored one then
+        stays."""
+        template = self.checked_path_template(text)
         self._settings.set(PATH_TEMPLATE_SETTING, template.text)
         return template
 

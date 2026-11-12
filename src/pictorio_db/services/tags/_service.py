@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from pictorio_db.db import Database
 from pictorio_db.db.models import Namespace, Tag, image_tag
+from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.tags._names import (
     TagName,
     normalized_name_prefix,
@@ -34,6 +35,11 @@ class TagCount:
     image_count: int
 
 
+RATING_NAMESPACE = "rating"
+RATING_VALUES_SETTING = "rating_values"
+DEFAULT_RATING_VALUES = ("sfw", "nsfw")
+MAX_RATING_VALUES = 20
+
 # Sorts after every other character, so names from `prefix` up to `prefix + this` start with `prefix`.
 _LAST_CHARACTER = "\U0010ffff"
 
@@ -44,12 +50,15 @@ class TagsService:
 
     def __init__(self, database: Database, path_template_namespaces: Callable[[], frozenset[str]]) -> None:
         self._database = database
+        self._settings = SettingsService(database)
         self._path_template_namespaces = path_template_namespaces
 
     def resolve_tags(self, texts: list[str]) -> list[TagName]:
         """Parses tags as given for an image: each tag once, and in a single-value namespace only the last
-        one, because a later tag replaces an earlier one (category:photo, category:artwork → artwork)."""
+        one, because a later tag replaces an earlier one (category:photo, category:artwork → artwork).
+        Ratings must be one of rating_values(): a typo must not slip past a restriction such as rating:nsfw."""
         tags = [self.parse_tag(text) for text in texts]
+        self._check_ratings(tags, texts)
         single_value = {namespace.name for namespace in self.list_namespaces() if namespace.single_value}
         kept: list[TagName] = []
         seen_single_value: set[str] = set()
@@ -63,6 +72,26 @@ class TagsService:
             kept.append(tag)
 
         return kept[::-1]
+
+    def rating_values(self) -> list[str]:
+        stored_values = self._settings.get(RATING_VALUES_SETTING)
+        return list(DEFAULT_RATING_VALUES) if stored_values is None else stored_values
+
+    def checked_rating_values(self, texts: list[str]) -> list[str]:
+        """Normalized, each once. Raises 422 invalid_tag or validation_error."""
+        values = list(dict.fromkeys(normalized_tag_name(text) for text in texts))
+        if not 1 <= len(values) <= MAX_RATING_VALUES:
+            raise Problem(
+                422, "validation_error", "Invalid ratings", f"Give from 1 to {MAX_RATING_VALUES} rating values."
+            )
+
+        return values
+
+    def set_rating_values(self, texts: list[str]) -> list[str]:
+        """Images keep a rating that is no longer listed; it just cannot be given again."""
+        values = self.checked_rating_values(texts)
+        self._settings.set(RATING_VALUES_SETTING, values)
+        return values
 
     def parse_tag(self, text: str) -> TagName:
         """"Author:Sample Artist" → author:sample_artist. Raises 422 invalid_tag."""
@@ -116,6 +145,18 @@ class TagsService:
                 offset += batch_size
 
         return found[:limit]
+
+    def _check_ratings(self, tags: list[TagName], texts: list[str]) -> None:
+        allowed = self.rating_values()
+        for tag, text in zip(tags, texts):
+            if tag.namespace == RATING_NAMESPACE and tag.name not in allowed:
+                raise Problem(
+                    422,
+                    "invalid_tag",
+                    "Invalid tag",
+                    f"A rating is one of: {', '.join(allowed)}. An admin can add more in the settings.",
+                    tag=text,
+                )
 
     def _split_prefix(self, prefix: str) -> tuple[str | None, str]:
         """Like split_tag, but text without a namespace searches all namespaces instead of general only."""

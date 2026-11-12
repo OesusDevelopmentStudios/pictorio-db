@@ -13,8 +13,12 @@ from pictorio_db.api.v1.dependencies import (
     AuthServiceDependency,
     CurrentAdmin,
     FolderImportDependency,
+    ServerSettingsDependency,
 )
 from pictorio_db.services.auth import PASSWORD_MAX_LENGTH, Role, UserInfo
+from pictorio_db.services.importer import UPLOAD_LIMIT_RANGE
+from pictorio_db.services.server_settings import ServerSettingsInfo, SettingsChanges
+from pictorio_db.services.tags import MAX_RATING_VALUES
 from pictorio_db.utils.problems import problem_responses
 from pictorio_db.utils.time import as_utc
 
@@ -99,6 +103,67 @@ def update_user(
 )
 def delete_user(user_id: int, _admin: CurrentAdmin, auth: AuthServiceDependency) -> None:
     auth.delete_user(user_id)
+
+
+class Settings(BaseModel):
+    path_template: str = Field(
+        description="Where images are stored in the library: folders named by {namespace} placeholders and "
+        "{year} and {month}",
+        examples=["{category}/{author}/{year}"],
+    )
+    max_upload_bytes: int
+    rating_values: list[str] = Field(description="The only values a rating: tag may have", examples=[["sfw", "nsfw"]])
+    library_dir: str = Field(description="Read-only: set with PICTORIO_LIBRARY_DIR")
+    import_dir: str | None = Field(
+        description="Read-only: set with PICTORIO_IMPORT_DIR; null if folder imports are off"
+    )
+
+
+class ChangedSettings(Settings):
+    job_id: int | None = Field(description="The job that moves the files after a new path_template; else null")
+
+
+class SettingsChangeRequest(BaseModel):
+    """Only the settings given are changed."""
+
+    path_template: str | None = Field(
+        default=None, max_length=1000, description="A different template starts a job that moves every file"
+    )
+    max_upload_bytes: int | None = Field(default=None, ge=UPLOAD_LIMIT_RANGE[0], le=UPLOAD_LIMIT_RANGE[1])
+    rating_values: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_RATING_VALUES,
+        description="Images keep a rating that is removed here, but it cannot be given again",
+    )
+
+
+@router.get("/settings", summary="The server's settings", responses=problem_responses(401, 403))
+def get_settings(_admin: CurrentAdmin, server_settings: ServerSettingsDependency) -> Settings:
+    return Settings(**_settings_fields(server_settings.current()))
+
+
+@router.patch(
+    "/settings",
+    summary="Change the server's settings; a new path template moves the files in the background",
+    responses=problem_responses(401, 403, 422),
+)
+def change_settings(
+    request: SettingsChangeRequest, admin: CurrentAdmin, server_settings: ServerSettingsDependency
+) -> ChangedSettings:
+    changes = SettingsChanges(request.path_template, request.max_upload_bytes, request.rating_values)
+    settings, job = server_settings.change(changes, admin.user.id)
+    return ChangedSettings(**_settings_fields(settings), job_id=None if job is None else job.id)
+
+
+def _settings_fields(settings: ServerSettingsInfo) -> dict[str, object]:
+    return {
+        "path_template": settings.path_template,
+        "max_upload_bytes": settings.max_upload_bytes,
+        "rating_values": settings.rating_values,
+        "library_dir": str(settings.library_dir),
+        "import_dir": None if settings.import_dir is None else str(settings.import_dir),
+    }
 
 
 class ImportRequest(BaseModel):

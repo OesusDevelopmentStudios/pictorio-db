@@ -18,6 +18,7 @@ from pictorio_db.utils.problems import Problem
 
 MAX_UPLOAD_BYTES_SETTING = "max_upload_bytes"
 DEFAULT_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+UPLOAD_LIMIT_RANGE = (1024 * 1024, 10 * 1024 * 1024 * 1024)  # what an admin may set: 1 MiB to 10 GiB
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,10 @@ class ImporterService:
     def max_upload_bytes(self) -> int:
         stored_limit = self._settings.get(MAX_UPLOAD_BYTES_SETTING)
         return DEFAULT_MAX_UPLOAD_BYTES if stored_limit is None else stored_limit
+
+    def set_max_upload_bytes(self, limit: int) -> None:
+        check_upload_limit(limit)
+        self._settings.set(MAX_UPLOAD_BYTES_SETTING, limit)
 
     def new_incoming_path(self) -> Path:
         """Where to write an upload before passing it to import_image()."""
@@ -169,6 +174,15 @@ class ImporterService:
             return TakenAt(metadata.file_mtime.replace(tzinfo=None), "file_mtime", None)
 
         return TakenAt(self._now(), "import_time", None)
+
+
+def check_upload_limit(limit: int) -> None:
+    """Raises 422 validation_error if an admin may not set it."""
+    smallest, largest = UPLOAD_LIMIT_RANGE
+    if not smallest <= limit <= largest:
+        raise Problem(
+            422, "validation_error", "Invalid upload limit", f"The limit must be from {smallest} to {largest} bytes."
+        )
 
 
 def _check_client_sha256(client_sha256: str | None, sha256: str) -> None:

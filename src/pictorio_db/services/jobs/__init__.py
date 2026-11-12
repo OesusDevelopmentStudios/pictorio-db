@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
-"""Long tasks run one at a time by a background worker: folder imports, re-layouts, tag renames."""
+"""Long tasks run one at a time by a background worker: folder imports, re-layouts."""
 
 from pictorio_db.services.jobs._folder_import import FolderImport
+from pictorio_db.services.jobs._relayout import Relayout
 from pictorio_db.services.jobs._service import (
     LIST_LIMIT,
     JobContext,
@@ -24,5 +25,6 @@ __all__ = [
     "JobKind",
     "JobStatus",
     "JobsService",
+    "Relayout",
     "StopRequested",
 ]

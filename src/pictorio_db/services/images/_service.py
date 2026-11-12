@@ -136,6 +136,17 @@ class ImagesService:
         self._move_files_to_layout(changed_ids)
         return len(unique_ids)
 
+    def all_image_ids(self) -> list[int]:
+        with self._database.session() as session:
+            return list(session.scalars(select(Image.id).order_by(Image.id)))
+
+    def move_file_to_layout(self, image_id: int) -> bool:
+        """Moves the image's file to where its tags and the path template place it. False if it was there.
+        Raises 404 not_found, or OSError if moving fails; the file then stays where the database says."""
+        record = self.get_image(image_id)
+        current_path = PurePosixPath(record.storage_path)
+        return self._storage.move_to_layout(record.id, current_path, record.tags, record.taken_at) != current_path
+
     def find_id_by_sha256(self, sha256: str) -> int | None:
         with self._database.session() as session:
             return session.scalar(select(Image.id).where(Image.sha256 == sha256))
@@ -166,12 +177,11 @@ class ImagesService:
     def _move_files_to_layout(self, image_ids: list[int]) -> None:
         """After a tag change. A failed move leaves the file where the database says it is; it is logged, and
         the tag change stays."""
-        for record in self.get_images(image_ids):
+        for image_id in image_ids:
             try:
-                current_path = PurePosixPath(record.storage_path)
-                self._storage.move_to_layout(record.id, current_path, record.tags, record.taken_at)
+                self.move_file_to_layout(image_id)
             except OSError as error:
-                _logger.error("Could not move the file of image %s after a tag change: %s", record.id, error)
+                _logger.error("Could not move the file of image %s after a tag change: %s", image_id, error)
 
 
 def duplicate_image(sha256: str, existing_image_id: int | None) -> Problem:

@@ -11,10 +11,18 @@ from pictorio_db.services.tags._names import (
     normalized_tag_name,
     split_tag,
 )
-from pictorio_db.services.tags._service import NamespaceInfo, TagCount, TagsService
+from pictorio_db.services.tags._service import (
+    DEFAULT_RATING_VALUES,
+    MAX_RATING_VALUES,
+    NamespaceInfo,
+    TagCount,
+    TagsService,
+)
 
 __all__ = [
+    "DEFAULT_RATING_VALUES",
     "GENERAL_NAMESPACE",
+    "MAX_RATING_VALUES",
     "NamespaceInfo",
     "RESERVED_NAMESPACE_NAMES",
     "TagCount",

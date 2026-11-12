@@ -125,3 +125,45 @@ def test_resolve_keeps_every_tag_of_a_multi_value_namespace(tags: TagsService) -
     resolved = tags.resolve_tags(["author:first_artist", "author:second_artist"])
 
     assert [str(tag) for tag in resolved] == ["author:first_artist", "author:second_artist"]
+
+
+# --- Ratings
+
+def test_ratings_are_sfw_and_nsfw_by_default(tags: TagsService) -> None:
+    assert tags.rating_values() == ["sfw", "nsfw"]
+    assert tags.resolve_tags(["Rating:NSFW"]) == [TagName("rating", "nsfw")]
+
+
+def test_rating_that_is_not_listed_is_refused(tags: TagsService) -> None:
+    problem = raised_problem(lambda: tags.resolve_tags(["summer", "rating:nsf"]))
+
+    assert (problem.status, problem.code, problem.extra["tag"]) == (422, "invalid_tag", "rating:nsf")
+    assert "sfw, nsfw" in problem.detail
+
+
+def test_rating_values_are_normalised_and_kept_once(tags: TagsService) -> None:
+    assert tags.set_rating_values(["Safe", "Questionable", "safe", "Explicit"]) == ["safe", "questionable", "explicit"]
+
+    assert tags.rating_values() == ["safe", "questionable", "explicit"]
+    assert tags.resolve_tags(["rating:questionable"]) == [TagName("rating", "questionable")]
+
+
+def test_removed_rating_can_still_be_named_for_removal(tags: TagsService) -> None:
+    tags.set_rating_values(["sfw"])
+
+    assert raised_problem(lambda: tags.resolve_tags(["rating:nsfw"])).code == "invalid_tag"
+    assert tags.parse_tag("rating:nsfw") == TagName("rating", "nsfw")  # remove_tags parses without the check
+
+
+@pytest.mark.parametrize(
+    "values, code",
+    [
+        ([], "validation_error"),
+        ([f"r{number}" for number in range(21)], "validation_error"),
+        (["sfw", "a|b"], "invalid_tag"),
+    ],
+    ids=["none", "too many", "invalid name"],
+)
+def test_invalid_rating_values_are_refused(tags: TagsService, values: list[str], code: str) -> None:
+    assert raised_problem(lambda: tags.set_rating_values(values)).code == code
+    assert tags.rating_values() == ["sfw", "nsfw"]
