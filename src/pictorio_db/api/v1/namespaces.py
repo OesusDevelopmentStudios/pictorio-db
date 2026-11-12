@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
-"""/namespaces: the part before ':' in a tag, e.g. 'author' in 'author:polina_graff'."""
+"""/namespaces: the part before ':' in a tag, e.g. 'author' in 'author:sample_artist'."""
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field

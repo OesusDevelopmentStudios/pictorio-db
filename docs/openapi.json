@@ -221,6 +221,98 @@
         }
       }
     },
+    "/api/v1/tags": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Tags starting with a prefix, most used first",
+        "operationId": "list_tags_api_v1_tags_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "May include a namespace: author:pol",
+              "default": "",
+              "title": "Prefix"
+            },
+            "description": "May include a namespace: author:pol"
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this namespace",
+              "title": "Namespace"
+            },
+            "description": "Only this namespace"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagList"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemModel"
+                }
+              }
+            },
+            "description": "Problem details (RFC 9457)"
+          }
+        }
+      }
+    },
     "/api/v1/namespaces": {
       "get": {
         "tags": [
@@ -1033,6 +1125,44 @@
           "setup_required"
         ],
         "title": "ServerInfo"
+      },
+      "TagList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagWithCount"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TagList"
+      },
+      "TagWithCount": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag",
+            "examples": [
+              "author:sample_artist"
+            ]
+          },
+          "image_count": {
+            "type": "integer",
+            "title": "Image Count",
+            "description": "All images with this tag, also ones the user cannot see"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "image_count"
+        ],
+        "title": "TagWithCount"
       },
       "UserChanges": {
         "properties": {

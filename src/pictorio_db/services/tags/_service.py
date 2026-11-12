@@ -4,12 +4,18 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 
 from pictorio_db.db import Database
-from pictorio_db.db.models import Namespace, Tag
-from pictorio_db.services.tags._names import TagName, normalized_namespace_name, normalized_tag_name, split_tag
+from pictorio_db.db.models import Namespace, Tag, image_tag
+from pictorio_db.services.tags._names import (
+    TagName,
+    normalized_name_prefix,
+    normalized_namespace_name,
+    normalized_tag_name,
+    split_tag,
+)
 from pictorio_db.utils.problems import Problem
 from pictorio_db.utils.time import utc_now
 
@@ -22,6 +28,16 @@ class NamespaceInfo:
     in_path_template: bool  # its tags form folder names in the library
 
 
+@dataclass(frozen=True)
+class TagCount:
+    tag: TagName
+    image_count: int
+
+
+# Sorts after every other character, so names from `prefix` up to `prefix + this` start with `prefix`.
+_LAST_CHARACTER = "\U0010ffff"
+
+
 class TagsService:
     """Namespaces and tags. `path_template_namespaces` returns the namespaces the library's path template
     uses; they cannot be deleted."""
@@ -31,9 +47,46 @@ class TagsService:
         self._path_template_namespaces = path_template_namespaces
 
     def parse_tag(self, text: str) -> TagName:
-        """"Author:Polina Graff" → author:polina_graff. Raises 422 invalid_tag."""
+        """"Author:Polina Graff" → author:sample_artist. Raises 422 invalid_tag."""
         namespace, name = split_tag(text, self.namespace_names())
         return TagName(namespace, normalized_tag_name(name))
+
+    def autocomplete(self, prefix: str = "", namespace: str | None = None, limit: int = 20) -> list[TagCount]:
+        """Tags starting with `prefix`, most used first. "author:pol" searches one namespace, "pol" all of them.
+        `image_count` counts all images, also ones a restricted user cannot see."""
+        prefix_namespace, name_prefix = self._split_prefix(prefix)
+        namespaces = {name for name in (prefix_namespace, namespace and namespace.lower()) if name}
+        if len(namespaces) > 1:
+            return []  # the namespace filter and the prefix's namespace disagree
+
+        image_count = func.count(image_tag.c.image_id)
+        query = (
+            select(Namespace.name, Tag.name, image_count)
+            .join(Namespace, Tag.namespace_id == Namespace.id)
+            .outerjoin(image_tag, image_tag.c.tag_id == Tag.id)
+            .group_by(Tag.id)
+            .order_by(image_count.desc(), Namespace.name, Tag.name)
+            .limit(limit)
+        )
+        if namespaces:
+            query = query.where(Namespace.name == namespaces.pop())
+
+        if name_prefix:
+            query = query.where(Tag.name >= name_prefix, Tag.name < name_prefix + _LAST_CHARACTER)
+
+        with self._database.session() as session:
+            return [
+                TagCount(TagName(namespace_name, tag_name), count)
+                for namespace_name, tag_name, count in session.execute(query)
+            ]
+
+    def _split_prefix(self, prefix: str) -> tuple[str | None, str]:
+        """Like split_tag, but text without a namespace searches all namespaces instead of general only."""
+        namespace, separator, rest = prefix.partition(":")
+        if separator and namespace.strip().lower() in self.namespace_names():
+            return namespace.strip().lower(), normalized_name_prefix(rest)
+
+        return None, normalized_name_prefix(prefix)
 
     # --- Namespaces
 

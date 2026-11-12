@@ -31,7 +31,7 @@ class Base(DeclarativeBase):
 
 
 class Namespace(Base):
-    """The part before ':' in a tag, e.g. 'author' in 'author:polina_graff'."""
+    """The part before ':' in a tag, e.g. 'author' in 'author:sample_artist'."""
 
     __tablename__ = "namespace"
 

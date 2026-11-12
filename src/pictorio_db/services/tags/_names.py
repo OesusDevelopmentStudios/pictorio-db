@@ -44,6 +44,12 @@ def split_tag(text: str, namespace_names: Collection[str]) -> tuple[str, str]:
     return GENERAL_NAMESPACE, text
 
 
+def normalized_name_prefix(typed_text: str) -> str:
+    """What the user has typed so far, in the form of a tag name: "On the Be" → "on_the_be". Not checked
+    against the rules: it is only compared with existing tags."""
+    return re.sub(" +", "_", unicodedata.normalize("NFC", typed_text).lstrip().lower())
+
+
 def normalized_tag_name(name: str) -> str:
     """Trims, lowercases and joins words with '_', then checks the result. Raises 422 invalid_tag."""
     normalized = re.sub(" +", "_", unicodedata.normalize("NFC", name).strip().lower())

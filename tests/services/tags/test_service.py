@@ -96,7 +96,7 @@ def test_unknown_namespace_is_not_found(tags: TagsService) -> None:
 # --- Parsing tags
 
 def test_parses_and_normalises_a_tag(tags: TagsService) -> None:
-    assert tags.parse_tag("Author:Polina Graff") == TagName("author", "polina_graff")
+    assert tags.parse_tag("Author:Sample Artist") == TagName("author", "sample_artist")
 
 
 def test_new_namespace_becomes_a_tag_prefix(tags: TagsService) -> None:

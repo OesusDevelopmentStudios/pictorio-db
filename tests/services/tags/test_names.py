@@ -95,7 +95,7 @@ def test_allows_one_hundred_characters_but_not_more() -> None:
 # --- Splitting "namespace:name"
 
 def test_splits_at_an_existing_namespace() -> None:
-    assert split_tag("author:polina_graff", NAMESPACES) == ("author", "polina_graff")
+    assert split_tag("author:sample_artist", NAMESPACES) == ("author", "sample_artist")
 
 
 def test_text_without_namespace_is_general() -> None:
