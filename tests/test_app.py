@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
 import logging
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,8 +10,8 @@ from sqlalchemy import select
 
 from pictorio_db.app import create_app
 from pictorio_db.config import Config
-from pictorio_db.db import DATABASE_FILE_NAME
-from pictorio_db.db.models import Namespace
+from pictorio_db.db import DATABASE_FILE_NAME, open_database
+from pictorio_db.db.models import FileMove, Image, Namespace
 from pictorio_db.services.auth import Role
 
 
@@ -54,3 +55,30 @@ def test_does_not_log_a_setup_code_once_an_admin_exists(config: Config, caplog: 
         pass
 
     assert "setup code" not in caplog.text
+
+
+def test_finishes_interrupted_file_moves_when_it_starts(config: Config) -> None:
+    # A move that a crash interrupted: the file is already at its new place, the database not yet updated.
+    moment = datetime(2026, 11, 12, 12, 0)
+    database = open_database(config.data_dir / DATABASE_FILE_NAME)
+    with database.session() as session:
+        image = Image(
+            sha256="ab" * 32, storage_path="old/beach.jpg", original_filename="beach.jpg", mime_type="image/jpeg",
+            width=1, height=1, file_size=1, taken_at=moment, taken_at_source="import_time",
+            imported_at=moment, updated_at=moment,
+        )
+        session.add(image)
+        session.flush()
+        session.add(FileMove(image_id=image.id, from_path="old/beach.jpg", to_path="new/beach.jpg", created_at=moment))
+        session.commit()
+    database.close()
+    (config.library_dir / "new").mkdir()
+    (config.library_dir / "new" / "beach.jpg").write_bytes(b"image")
+
+    with TestClient(create_app(config)) as client:
+        with client.app.state.database.session() as session:
+            stored_path = session.scalars(select(Image.storage_path)).one()
+            leftover_moves = session.scalars(select(FileMove)).all()
+
+    assert stored_path == "new/beach.jpg"
+    assert leftover_moves == []

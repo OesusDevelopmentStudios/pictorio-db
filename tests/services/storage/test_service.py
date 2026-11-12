@@ -20,7 +20,7 @@ def namespaces() -> set[str]:
 
 @pytest.fixture
 def storage(database: Database, tmp_path: Path, namespaces: set[str]) -> StorageService:
-    return StorageService(SettingsService(database), tmp_path / "library", lambda: namespaces)
+    return StorageService(database, SettingsService(database), tmp_path / "library", lambda: namespaces)
 
 
 def test_uses_the_default_template_until_one_is_set(storage: StorageService) -> None:

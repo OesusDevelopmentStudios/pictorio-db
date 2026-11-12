@@ -1,13 +1,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
+import errno
+import logging
 from collections.abc import Callable, Collection
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
+from sqlalchemy import delete, select, update
+
+from pictorio_db.db import Database
+from pictorio_db.db.models import FileMove, Image
 from pictorio_db.services.settings import SettingsService
+from pictorio_db.services.storage._files import delete_file, move_file, partial_path, remove_empty_folders
 from pictorio_db.services.storage._paths import DEFAULT_PATH_TEMPLATE, PathTemplate, parse_path_template
+from pictorio_db.utils.time import utc_now
 
 PATH_TEMPLATE_SETTING = "path_template"
+
+_logger = logging.getLogger(__name__)
 
 
 class StorageService:
@@ -15,11 +25,18 @@ class StorageService:
     path template may use."""
 
     def __init__(
-        self, settings: SettingsService, library_dir: Path, namespace_names: Callable[[], Collection[str]]
+        self,
+        database: Database,
+        settings: SettingsService,
+        library_dir: Path,
+        namespace_names: Callable[[], Collection[str]],
     ) -> None:
+        self._database = database
         self._settings = settings
         self._namespace_names = namespace_names
         self.library_dir = library_dir
+
+    # --- Path template
 
     def path_template(self) -> PathTemplate:
         stored_text = self._settings.get(PATH_TEMPLATE_SETTING)
@@ -34,3 +51,89 @@ class StorageService:
         template = parse_path_template(text.strip(), self._namespace_names())
         self._settings.set(PATH_TEMPLATE_SETTING, template.text)
         return template
+
+    # --- Moving files
+
+    def move_image_file(self, image_id: int, to_path: PurePosixPath) -> None:
+        """Moves an image's file within the library, e.g. after a tag change. `to_path` is relative to the
+        library. Raises FileExistsError if a file is in the way, or another OSError if moving fails."""
+        target = self.absolute_path(to_path)
+        if target.exists():
+            raise FileExistsError(errno.EEXIST, "The target file exists already", str(target))
+
+        move_id, from_path = self._record_move(image_id, to_path)
+        try:
+            move_file(self.absolute_path(from_path), target)
+        except OSError:
+            if not target.exists():  # nothing reached the new place: the move did not happen
+                partial_path(target).unlink(missing_ok=True)
+                self._forget_move(move_id)
+
+            raise  # otherwise the complete copy is there; the next start finishes the move
+
+        self._finish_move(move_id, image_id, to_path)
+        remove_empty_folders(self.absolute_path(from_path).parent, self.library_dir)
+
+    def finish_interrupted_moves(self) -> int:
+        """Run at startup: completes or undoes the moves a crash interrupted. Returns how many it handled."""
+        with self._database.session() as session:
+            moves = session.scalars(select(FileMove).order_by(FileMove.id)).all()
+
+        return sum(self._finish_interrupted_move(move) for move in moves)
+
+    def absolute_path(self, library_path: PurePosixPath | str) -> Path:
+        relative = PurePosixPath(library_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Not a path inside the library: {library_path}")
+
+        return self.library_dir / relative
+
+    # The steps of a move. A crash can happen between any two of them.
+
+    def _record_move(self, image_id: int, to_path: PurePosixPath) -> tuple[int, PurePosixPath]:
+        with self._database.session() as session:
+            from_path = session.get_one(Image, image_id).storage_path
+            move = FileMove(image_id=image_id, from_path=from_path, to_path=str(to_path), created_at=utc_now())
+            session.add(move)
+            session.commit()
+            return move.id, PurePosixPath(from_path)
+
+    def _finish_move(self, move_id: int, image_id: int, to_path: PurePosixPath | str) -> None:
+        """The new path and the end of the move are recorded in one transaction."""
+        with self._database.session() as session:
+            session.execute(
+                update(Image).where(Image.id == image_id).values(storage_path=str(to_path), updated_at=utc_now())
+            )
+            session.execute(delete(FileMove).where(FileMove.id == move_id))
+            session.commit()
+
+    def _forget_move(self, move_id: int) -> None:
+        with self._database.session() as session:
+            session.execute(delete(FileMove).where(FileMove.id == move_id))
+            session.commit()
+
+    def _finish_interrupted_move(self, move: FileMove) -> bool:
+        source = self.absolute_path(move.from_path)
+        target = self.absolute_path(move.to_path)
+        if target.exists():
+            if source.exists():
+                delete_file(source)  # the copy across filesystems was complete; only the original was left
+
+            self._finish_move(move.id, move.image_id, move.to_path)
+            remove_empty_folders(source.parent, self.library_dir)
+            _logger.info("Finished an interrupted move of image %s to %s", move.image_id, move.to_path)
+            return True
+
+        if source.exists():
+            partial_path(target).unlink(missing_ok=True)  # the copy had not finished; the original is intact
+            self._forget_move(move.id)
+            _logger.info("Undid an interrupted move of image %s; it stays at %s", move.image_id, move.from_path)
+            return True
+
+        _logger.error(
+            "The file of image %s is neither at %s nor at %s; the move is kept for an admin to look at",
+            move.image_id,
+            move.from_path,
+            move.to_path,
+        )
+        return False

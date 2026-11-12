@@ -116,3 +116,16 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(primary_key=True)
     value: Mapped[Any] = mapped_column(JSON)
+
+
+class FileMove(Base):
+    """A file move in progress. Written before the file is moved and deleted in the same transaction that
+    records the new path, so after a crash the server can tell where the file is (see services/storage)."""
+
+    __tablename__ = "file_move"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    image_id: Mapped[int] = mapped_column(ForeignKey("image.id", ondelete="CASCADE"))
+    from_path: Mapped[str]  # relative to the library folder
+    to_path: Mapped[str]  # relative to the library folder
+    created_at: Mapped[datetime]  # UTC
