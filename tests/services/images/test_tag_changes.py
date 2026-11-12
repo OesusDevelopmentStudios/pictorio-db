@@ -10,6 +10,7 @@ import pytest
 from PIL import ExifTags, Image
 
 from pictorio_db.db import Database
+from pictorio_db.services.access import Restrictions
 from pictorio_db.services.images import ImageRecord, ImagesService
 from pictorio_db.services.importer import ImporterService, UploadMetadata
 from pictorio_db.services.settings import SettingsService
@@ -17,6 +18,8 @@ from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagsService
 from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import Problem
+
+NO_RESTRICTIONS = Restrictions([])
 
 
 class Library:
@@ -35,7 +38,16 @@ class Library:
         exif = Image.Exif()
         exif.get_ifd(ExifTags.IFD.Exif)[ExifTags.Base.DateTimeOriginal] = "2024:05:01 10:00:00"
         Image.new("RGB", (8, 8), colour).save(incoming, format="JPEG", exif=exif)
-        return self.importer.import_image(incoming, UploadMetadata(f"{colour}.jpg", tags=tags), user_id=None)
+        return self.importer.import_image(
+            incoming, UploadMetadata(f"{colour}.jpg", tags=tags), user_id=None, restrictions=NO_RESTRICTIONS
+        )
+
+    def change_tags(self, image_id: int, add_tags: list[str], remove_tags: list[str]) -> ImageRecord:
+        """For a user without restrictions."""
+        return self.images.change_tags(image_id, add_tags, remove_tags, NO_RESTRICTIONS)
+
+    def change_tags_of_many(self, image_ids: list[int], add_tags: list[str], remove_tags: list[str]) -> int:
+        return self.images.change_tags_of_many(image_ids, add_tags, remove_tags, NO_RESTRICTIONS)
 
     def folder_of(self, record: ImageRecord) -> str:
         return str(Path(record.storage_path).parent)
@@ -64,7 +76,7 @@ def problem_of(action: object) -> Problem:
 def test_adds_and_removes_tags(library: Library) -> None:
     image = library.add_image("red", ("category:photo", "summer", "beach"))
 
-    changed = library.images.change_tags(
+    changed = library.change_tags(
         image.id, add_tags=["Sunset Sky", "author:sample_artist"], remove_tags=["beach"]
     )
 
@@ -75,7 +87,7 @@ def test_adds_and_removes_tags(library: Library) -> None:
 def test_removing_a_tag_the_image_lacks_changes_nothing(library: Library) -> None:
     image = library.add_image("red", ("summer",))
 
-    unchanged = library.images.change_tags(image.id, add_tags=[], remove_tags=["winter"])
+    unchanged = library.change_tags(image.id, add_tags=[], remove_tags=["winter"])
 
     assert unchanged == image  # not even updated_at
 
@@ -83,7 +95,7 @@ def test_removing_a_tag_the_image_lacks_changes_nothing(library: Library) -> Non
 def test_tag_both_added_and_removed_stays(library: Library) -> None:
     image = library.add_image("red", ("summer",))
 
-    changed = library.images.change_tags(image.id, add_tags=["summer"], remove_tags=["summer"])
+    changed = library.change_tags(image.id, add_tags=["summer"], remove_tags=["summer"])
 
     assert tag_texts(changed) == ["general:summer"]
 
@@ -91,7 +103,7 @@ def test_tag_both_added_and_removed_stays(library: Library) -> None:
 def test_new_tag_in_a_single_value_namespace_replaces_the_old_one(library: Library) -> None:
     image = library.add_image("red", ("category:photo",))
 
-    changed = library.images.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
+    changed = library.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
 
     assert tag_texts(changed) == ["category:artwork"]
 
@@ -100,7 +112,7 @@ def test_moves_the_file_when_its_folder_changes(library: Library) -> None:
     image = library.add_image("red", ("category:photo",))
     assert library.folder_of(image) == "photo/_unknown/2024"
 
-    changed = library.images.change_tags(
+    changed = library.change_tags(
         image.id, add_tags=["category:artwork", "author:sample_artist"], remove_tags=[]
     )
 
@@ -113,7 +125,7 @@ def test_moves_the_file_when_its_folder_changes(library: Library) -> None:
 def test_keeps_the_file_when_the_folder_stays(library: Library) -> None:
     image = library.add_image("red", ("category:photo",))
 
-    changed = library.images.change_tags(image.id, add_tags=["summer"], remove_tags=[])
+    changed = library.change_tags(image.id, add_tags=["summer"], remove_tags=[])
 
     assert changed.storage_path == image.storage_path
 
@@ -124,7 +136,7 @@ def test_file_name_taken_in_the_new_folder_gets_a_number(library: Library) -> No
     occupied.parent.mkdir(parents=True)
     occupied.write_bytes(b"another file")
 
-    changed = library.images.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
+    changed = library.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
 
     assert changed.storage_path.endswith("_2.jpg")
     assert occupied.read_bytes() == b"another file"
@@ -133,14 +145,14 @@ def test_file_name_taken_in_the_new_folder_gets_a_number(library: Library) -> No
 def test_invalid_tag_changes_nothing(library: Library) -> None:
     image = library.add_image("red", ("summer",))
 
-    problem = problem_of(lambda: library.images.change_tags(image.id, add_tags=["ok", "a|b"], remove_tags=[]))
+    problem = problem_of(lambda: library.change_tags(image.id, add_tags=["ok", "a|b"], remove_tags=[]))
 
     assert (problem.status, problem.code) == (422, "invalid_tag")
     assert library.images.get_image(image.id) == image
 
 
 def test_unknown_image_is_not_found(library: Library) -> None:
-    assert problem_of(lambda: library.images.change_tags(999, add_tags=["summer"], remove_tags=[])).status == 404
+    assert problem_of(lambda: library.change_tags(999, add_tags=["summer"], remove_tags=[])).status == 404
 
 
 def test_failed_move_keeps_the_tags_and_the_file_where_recorded(
@@ -153,7 +165,7 @@ def test_failed_move_keeps_the_tags_and_the_file_where_recorded(
 
     monkeypatch.setattr(library.storage, "move_image_file", disk_unavailable)
     with caplog.at_level(logging.ERROR):
-        changed = library.images.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
+        changed = library.change_tags(image.id, add_tags=["category:artwork"], remove_tags=[])
 
     assert tag_texts(changed) == ["category:artwork"]
     assert changed.storage_path == image.storage_path
@@ -166,7 +178,7 @@ def test_failed_move_keeps_the_tags_and_the_file_where_recorded(
 def test_changes_many_images_and_moves_their_files(library: Library) -> None:
     images = [library.add_image(colour, ("category:photo",)) for colour in ("red", "green", "blue")]
 
-    updated = library.images.change_tags_of_many(
+    updated = library.change_tags_of_many(
         [image.id for image in images], add_tags=["author:sample_artist", "album:trip"], remove_tags=[]
     )
 
@@ -181,7 +193,7 @@ def test_unknown_id_changes_none_of_the_images(library: Library) -> None:
     image = library.add_image("red", ("summer",))
 
     problem = problem_of(
-        lambda: library.images.change_tags_of_many([image.id, 999], add_tags=["album:trip"], remove_tags=[])
+        lambda: library.change_tags_of_many([image.id, 999], add_tags=["album:trip"], remove_tags=[])
     )
 
     assert (problem.status, problem.detail) == (404, "One of the images does not exist.")
@@ -191,14 +203,14 @@ def test_unknown_id_changes_none_of_the_images(library: Library) -> None:
 def test_repeated_ids_count_once(library: Library) -> None:
     image = library.add_image("red", ())
 
-    assert library.images.change_tags_of_many([image.id, image.id], add_tags=["summer"], remove_tags=[]) == 1
+    assert library.change_tags_of_many([image.id, image.id], add_tags=["summer"], remove_tags=[]) == 1
 
 
 def test_images_that_already_have_the_tag_are_not_touched(library: Library) -> None:
     tagged = library.add_image("red", ("summer",))
     untagged = library.add_image("green", ())
 
-    library.images.change_tags_of_many([tagged.id, untagged.id], add_tags=["summer"], remove_tags=[])
+    library.change_tags_of_many([tagged.id, untagged.id], add_tags=["summer"], remove_tags=[])
 
     assert library.images.get_image(tagged.id).updated_at == tagged.updated_at
     assert tag_texts(library.images.get_image(untagged.id)) == ["general:summer"]

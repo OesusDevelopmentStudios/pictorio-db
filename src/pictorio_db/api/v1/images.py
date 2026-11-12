@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 from pictorio_db.api.v1._upload_receiver import METADATA_PART, receive_upload
 from pictorio_db.api.v1.dependencies import (
     CurrentAuthentication,
+    CurrentRestrictions,
     ImagesServiceDependency,
     ImporterServiceDependency,
     PreferencesServiceDependency,
@@ -109,6 +110,7 @@ _UPLOAD_REQUEST_BODY = {
 @router.get("", summary="Search and list images", responses=problem_responses(400, 401, 422))
 def search_images(
     authentication: CurrentAuthentication,
+    restrictions: CurrentRestrictions,
     search: SearchServiceDependency,
     images: ImagesServiceDependency,
     preferences: PreferencesServiceDependency,
@@ -124,7 +126,7 @@ def search_images(
     request = SearchRequest(
         query=q, sort=sort, order=order, seed=seed, limit=limit, cursor=cursor, hidden_filters=tuple(hidden_filters)
     )
-    page = search.search(request)
+    page = search.search(request, restrictions.visible_images_filter())
     return ImageList(
         items=[_image_object(record) for record in images.get_images(page.image_ids)],
         next_cursor=page.next_cursor,
@@ -136,13 +138,14 @@ def search_images(
     "",
     status_code=status.HTTP_201_CREATED,
     summary="Upload one image",
-    responses=problem_responses(401, 409, 413, 415, 422),
+    responses=problem_responses(401, 403, 409, 413, 415, 422),
     openapi_extra={"requestBody": _UPLOAD_REQUEST_BODY},
 )
 async def upload_image(
     request: Request,
     response: Response,
     authentication: CurrentAuthentication,
+    restrictions: CurrentRestrictions,
     importer: ImporterServiceDependency,
 ) -> ImageObject:
     incoming = importer.new_incoming_path()
@@ -154,7 +157,9 @@ async def upload_image(
         raise
 
     # Hashing and thumbnails take a while; the server keeps answering other requests meanwhile.
-    record = await run_in_threadpool(importer.import_image, incoming, metadata, authentication.user.id)
+    record = await run_in_threadpool(
+        importer.import_image, incoming, metadata, authentication.user.id, restrictions
+    )
     response.headers["Location"] = f"/api/v1/images/{record.id}"
     return _image_object(record)
 
@@ -162,13 +167,13 @@ async def upload_image(
 @router.post(
     "/bulk-tags",
     summary="Change the tags of many images; all or nothing",
-    responses=problem_responses(401, 404, 422),
+    responses=problem_responses(401, 403, 404, 422),
 )
 async def change_tags_of_many(
-    changes: BulkTagChanges, _user: CurrentAuthentication, images: ImagesServiceDependency
+    changes: BulkTagChanges, restrictions: CurrentRestrictions, images: ImagesServiceDependency
 ) -> BulkTagResult:
     updated = await run_in_threadpool(
-        images.change_tags_of_many, changes.image_ids, changes.add_tags, changes.remove_tags
+        images.change_tags_of_many, changes.image_ids, changes.add_tags, changes.remove_tags, restrictions
     )
     return BulkTagResult(updated=updated)
 
@@ -176,18 +181,20 @@ async def change_tags_of_many(
 @router.patch(
     "/{image_id}",
     summary="Change an image's tags; a change to a folder-forming tag moves the file",
-    responses=problem_responses(401, 404, 422),
+    responses=problem_responses(401, 403, 404, 422),
 )
 async def change_tags(
-    image_id: int, changes: TagChanges, _user: CurrentAuthentication, images: ImagesServiceDependency
+    image_id: int, changes: TagChanges, restrictions: CurrentRestrictions, images: ImagesServiceDependency
 ) -> ImageObject:
-    record = await run_in_threadpool(images.change_tags, image_id, changes.add_tags, changes.remove_tags)
+    record = await run_in_threadpool(
+        images.change_tags, image_id, changes.add_tags, changes.remove_tags, restrictions
+    )
     return _image_object(record)
 
 
 @router.get("/{image_id}", summary="One image", responses=problem_responses(401, 404, 422))
-def get_image(image_id: int, _user: CurrentAuthentication, images: ImagesServiceDependency) -> ImageObject:
-    return _image_object(images.get_image(image_id))
+def get_image(image_id: int, restrictions: CurrentRestrictions, images: ImagesServiceDependency) -> ImageObject:
+    return _image_object(images.get_visible_image(image_id, restrictions))
 
 
 @router.get(
@@ -199,11 +206,11 @@ def get_image(image_id: int, _user: CurrentAuthentication, images: ImagesService
 def get_image_file(
     image_id: int,
     request: Request,
-    _user: CurrentAuthentication,
+    restrictions: CurrentRestrictions,
     images: ImagesServiceDependency,
     storage: StorageServiceDependency,
 ) -> Response:
-    record = images.get_image(image_id)
+    record = images.get_visible_image(image_id, restrictions)
     etag = f'"{record.sha256}"'
     if _client_has(request, etag):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
@@ -230,7 +237,7 @@ def get_image_file(
 def get_image_thumbnail(
     image_id: int,
     request: Request,
-    _user: CurrentAuthentication,
+    restrictions: CurrentRestrictions,
     images: ImagesServiceDependency,
     storage: StorageServiceDependency,
     thumbnails: ThumbnailsServiceDependency,
@@ -245,7 +252,7 @@ def get_image_thumbnail(
             errors=[{"field": "query.size", "message": f"One of {list(THUMBNAIL_SIZES)}"}],
         )
 
-    record = images.get_image(image_id)
+    record = images.get_visible_image(image_id, restrictions)
     etag = f'"{record.sha256}-{size}"'
     headers = {"ETag": etag, "Cache-Control": THUMBNAIL_CACHE_CONTROL}
     if _client_has(request, etag):

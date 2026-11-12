@@ -14,7 +14,8 @@ from sqlalchemy import func, select
 from pictorio_db.db import Database
 from pictorio_db.db.models import Image as ImageRow
 from pictorio_db.db.models import User
-from pictorio_db.services.images import ImagesService
+from pictorio_db.services.access import Restrictions
+from pictorio_db.services.images import ImageRecord, ImagesService
 from pictorio_db.services.importer import DEFAULT_MAX_UPLOAD_BYTES, ImporterService, UploadMetadata
 from pictorio_db.services.settings import SettingsService
 from pictorio_db.services.storage import StorageService
@@ -23,6 +24,7 @@ from pictorio_db.services.thumbnails import ThumbnailsService
 from pictorio_db.utils.problems import Problem
 
 IMPORT_TIME = datetime(2026, 11, 12, 9, 30)
+NO_RESTRICTIONS = Restrictions([])
 
 
 class Library:
@@ -40,6 +42,10 @@ class Library:
         self.importer = ImporterService(
             self.images, self.tags, self.storage, self.thumbnails, self.settings, now=lambda: IMPORT_TIME
         )
+
+    def import_image(self, incoming: Path, metadata: UploadMetadata, user_id: int | None) -> ImageRecord:
+        """For a user without restrictions."""
+        return self.importer.import_image(incoming, metadata, user_id, NO_RESTRICTIONS)
 
     def incoming_image(self, size: tuple[int, int] = (40, 30), taken: str | None = None, colour: str = "teal") -> Path:
         incoming = self.importer.new_incoming_path()
@@ -88,7 +94,7 @@ def test_stores_the_image_where_its_tags_and_date_say(library: Library) -> None:
     file_size = incoming.stat().st_size
     metadata = UploadMetadata("beach.JPG", tags=("category:photo", "author:Sample Artist", "summer"))
 
-    record = library.importer.import_image(incoming, metadata, user_id=None)
+    record = library.import_image(incoming, metadata, user_id=None)
 
     expected_path = f"photo/sample_artist/2024/beach_{sha256[:8]}.jpg"
     assert record.storage_path == expected_path
@@ -107,7 +113,7 @@ def test_records_who_imported_the_image(library: Library) -> None:
         session.commit()
         user_id = user.id
 
-    record = library.importer.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=user_id)
+    record = library.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=user_id)
 
     assert record.imported_by_user_id == user_id
 
@@ -115,13 +121,13 @@ def test_records_who_imported_the_image(library: Library) -> None:
 def test_date_comes_from_the_file_time_without_exif(library: Library) -> None:
     metadata = UploadMetadata("scan.jpg", file_mtime=datetime(2019, 3, 1, 10, 0))
 
-    record = library.importer.import_image(library.incoming_image(), metadata, user_id=None)
+    record = library.import_image(library.incoming_image(), metadata, user_id=None)
 
     assert (record.taken_at, record.taken_at_source) == (datetime(2019, 3, 1, 10, 0), "file_mtime")
 
 
 def test_date_is_the_import_time_without_anything_else(library: Library) -> None:
-    record = library.importer.import_image(library.incoming_image(), UploadMetadata("scan.jpg"), user_id=None)
+    record = library.import_image(library.incoming_image(), UploadMetadata("scan.jpg"), user_id=None)
 
     assert (record.taken_at, record.taken_at_source) == (IMPORT_TIME, "import_time")
 
@@ -129,14 +135,14 @@ def test_date_is_the_import_time_without_anything_else(library: Library) -> None
 def test_later_tag_replaces_earlier_one_in_single_value_namespace(library: Library) -> None:
     metadata = UploadMetadata("art.jpg", tags=("category:photo", "category:artwork"))
 
-    record = library.importer.import_image(library.incoming_image(), metadata, user_id=None)
+    record = library.import_image(library.incoming_image(), metadata, user_id=None)
 
     assert [str(tag) for tag in record.tags] == ["category:artwork"]
     assert record.storage_path.startswith("artwork/")
 
 
 def test_image_without_tags_goes_to_unknown_folders(library: Library) -> None:
-    record = library.importer.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
+    record = library.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
 
     assert record.storage_path.startswith("_unknown/_unknown/2026/")
 
@@ -145,7 +151,7 @@ def test_client_checksum_may_be_in_capitals(library: Library) -> None:
     incoming = library.incoming_image()
     metadata = UploadMetadata("a.jpg", client_sha256=sha256_of(incoming).upper())
 
-    library.importer.import_image(incoming, metadata, user_id=None)
+    library.import_image(incoming, metadata, user_id=None)
 
 
 def test_taken_file_name_gets_a_number(library: Library) -> None:
@@ -154,7 +160,7 @@ def test_taken_file_name_gets_a_number(library: Library) -> None:
     taken_path.parent.mkdir(parents=True)
     taken_path.write_bytes(b"a different file")
 
-    record = library.importer.import_image(incoming, UploadMetadata("a.jpg"), user_id=None)
+    record = library.import_image(incoming, UploadMetadata("a.jpg"), user_id=None)
 
     assert record.storage_path.endswith("_2.jpg")
 
@@ -164,18 +170,18 @@ def test_taken_file_name_gets_a_number(library: Library) -> None:
 def test_refuses_a_file_damaged_on_the_way(library: Library) -> None:
     metadata = UploadMetadata("a.jpg", client_sha256="0" * 64)
 
-    problem = refused(lambda: library.importer.import_image(library.incoming_image(), metadata, user_id=None))
+    problem = refused(lambda: library.import_image(library.incoming_image(), metadata, user_id=None))
 
     assert (problem.status, problem.code) == (422, "checksum_mismatch")
     library.assert_nothing_stored()
 
 
 def test_refuses_a_duplicate_and_keeps_the_existing_image(library: Library) -> None:
-    first = library.importer.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
+    first = library.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
     again = library.incoming_image()  # the same picture, so the same bytes
 
     problem = refused(
-        lambda: library.importer.import_image(again, UploadMetadata("b.jpg", tags=("summer",)), user_id=None)
+        lambda: library.import_image(again, UploadMetadata("b.jpg", tags=("summer",)), user_id=None)
     )
 
     assert (problem.status, problem.code) == (409, "duplicate_image")
@@ -189,7 +195,7 @@ def test_refuses_a_duplicate_and_keeps_the_existing_image(library: Library) -> N
 def test_refuses_an_invalid_tag(library: Library) -> None:
     metadata = UploadMetadata("a.jpg", tags=("rating:sfw", "a|b"))
 
-    problem = refused(lambda: library.importer.import_image(library.incoming_image(), metadata, user_id=None))
+    problem = refused(lambda: library.import_image(library.incoming_image(), metadata, user_id=None))
 
     assert (problem.status, problem.code) == (422, "invalid_tag")
     library.assert_nothing_stored()
@@ -199,7 +205,7 @@ def test_refuses_a_file_that_is_not_an_image(library: Library) -> None:
     incoming = library.importer.new_incoming_path()
     incoming.write_text("not an image")
 
-    problem = refused(lambda: library.importer.import_image(incoming, UploadMetadata("notes.jpg"), user_id=None))
+    problem = refused(lambda: library.import_image(incoming, UploadMetadata("notes.jpg"), user_id=None))
 
     assert (problem.status, problem.code) == (415, "unsupported_media_type")
     library.assert_nothing_stored()
@@ -210,7 +216,7 @@ def test_refuses_damaged_image_data(library: Library) -> None:
     whole = incoming.read_bytes()
     incoming.write_bytes(whole[: len(whole) // 2])  # the header is fine, the picture is cut off
 
-    problem = refused(lambda: library.importer.import_image(incoming, UploadMetadata("a.jpg"), user_id=None))
+    problem = refused(lambda: library.import_image(incoming, UploadMetadata("a.jpg"), user_id=None))
 
     assert problem.detail == "The image data is damaged."
     library.assert_nothing_stored()
@@ -223,7 +229,7 @@ def test_removes_the_stored_file_when_recording_fails(library: Library, monkeypa
     monkeypatch.setattr(library.images, "create_image", database_fails)
 
     with pytest.raises(RuntimeError):
-        library.importer.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
+        library.import_image(library.incoming_image(), UploadMetadata("a.jpg"), user_id=None)
 
     library.assert_nothing_stored()
     assert [path.name for path in library.library_dir.iterdir()] == [".incoming"]  # empty folders removed too

@@ -59,15 +59,16 @@ class SearchService:
         self._database = database
         self._namespace_names = namespace_names
 
-    def search(self, request: SearchRequest) -> SearchPage:
-        """Raises 400 invalid_query, or 422 validation_error for a missing seed or a damaged cursor."""
+    def search(self, request: SearchRequest, visible_images: ColumnElement[bool]) -> SearchPage:
+        """Only images matching `visible_images` (the user's restrictions; not shown in effective_query).
+        Raises 400 invalid_query, or 422 validation_error for a missing seed or a damaged cursor."""
         namespace_names = self._namespace_names()
         tree = parse_query(request.query, namespace_names)
         filtered = apply_hidden_filters(request.query, tree, list(request.hidden_filters), namespace_names)
 
         sort_value = _sort_value(request.sort, request.seed)
         descending = request.sort != Sort.RANDOM and request.order == Order.DESC
-        statement = select(Image.id, sort_value).where(matching_condition(filtered.tree))
+        statement = select(Image.id, sort_value).where(matching_condition(filtered.tree), visible_images)
         if request.cursor is not None:
             last_value, last_id = _decode_cursor(request.cursor, request.sort)
             statement = statement.where(_after(sort_value, last_value, last_id, descending))

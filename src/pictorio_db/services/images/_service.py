@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from pictorio_db.db import Database
 from pictorio_db.db.models import Image, Namespace, Tag, image_tag
+from pictorio_db.services.access import Restrictions
 from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagName, TagsService
 from pictorio_db.utils.problems import Problem
@@ -71,6 +72,18 @@ class ImagesService:
 
             return _record(session, image)
 
+    def get_visible_image(self, image_id: int, restrictions: Restrictions) -> ImageRecord:
+        """404 not_found also for an image the user is restricted from: it behaves as if it did not exist."""
+        if not self.is_visible(image_id, restrictions):
+            raise Problem(404, "not_found", "Image not found")
+
+        return self.get_image(image_id)
+
+    def is_visible(self, image_id: int, restrictions: Restrictions) -> bool:
+        with self._database.session() as session:
+            statement = select(Image.id).where(Image.id == image_id, restrictions.visible_images_filter())
+            return session.scalar(statement) is not None
+
     def get_images(self, image_ids: list[int]) -> list[ImageRecord]:
         """In the order of `image_ids`; ids that do not exist are left out. Tags are read in one query."""
         with self._database.session() as session:
@@ -82,22 +95,29 @@ class ImagesService:
                 if image_id in images
             ]
 
-    def change_tags(self, image_id: int, add_tags: list[str], remove_tags: list[str]) -> ImageRecord:
+    def change_tags(
+        self, image_id: int, add_tags: list[str], remove_tags: list[str], restrictions: Restrictions
+    ) -> ImageRecord:
         """Removes, then adds tags (unknown tags are created). In a single-value namespace an added tag replaces
         the image's current one. If its folder changes, the file is moved before this returns.
-        Raises 404 not_found or 422 invalid_tag."""
-        self.change_tags_of_many([image_id], add_tags, remove_tags)
+        Raises 404 not_found, 403 tag_restricted or 422 invalid_tag."""
+        self.change_tags_of_many([image_id], add_tags, remove_tags, restrictions)
         return self.get_image(image_id)
 
-    def change_tags_of_many(self, image_ids: list[int], add_tags: list[str], remove_tags: list[str]) -> int:
+    def change_tags_of_many(
+        self, image_ids: list[int], add_tags: list[str], remove_tags: list[str], restrictions: Restrictions
+    ) -> int:
         """The same change for several images, in one transaction: if anything fails, nothing changes. Files
-        are moved after the commit. Raises 404 not_found without saying which id is unknown."""
+        are moved after the commit. Images the user is restricted from count as unknown. Raises 404 not_found
+        without saying which id, 403 tag_restricted if an image would become restricted, or 422 invalid_tag."""
         additions = self._tags.resolve_tags(add_tags)
         removals = {self._tags.parse_tag(text) for text in remove_tags}
         single_value = {namespace.name for namespace in self._tags.list_namespaces() if namespace.single_value}
         unique_ids = list(dict.fromkeys(image_ids))
         with self._database.session() as session:
-            images = session.scalars(select(Image).where(Image.id.in_(unique_ids))).all()
+            images = session.scalars(
+                select(Image).where(Image.id.in_(unique_ids), restrictions.visible_images_filter())
+            ).all()
             if len(images) != len(unique_ids):
                 raise Problem(404, "not_found", "Image not found", "One of the images does not exist.")
 
@@ -106,6 +126,7 @@ class ImagesService:
             for image in images:
                 old_tags = current_tags.get(image.id, [])
                 new_tags = _tags_after_change(old_tags, additions, removals, single_value)
+                restrictions.check_tags_allowed(new_tags, image.taken_at)
                 if set(new_tags) != set(old_tags):
                     _replace_tags(session, image, old_tags, new_tags)
                     changed_ids.append(image.id)

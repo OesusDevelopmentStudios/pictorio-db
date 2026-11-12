@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
-from pictorio_db.api.v1.dependencies import CurrentAuthentication, TagsServiceDependency
+from pictorio_db.api.v1.dependencies import CurrentRestrictions, TagsServiceDependency
 from pictorio_db.utils.problems import problem_responses
 
 router = APIRouter(prefix="/tags", tags=["tags"])
@@ -25,11 +25,12 @@ class TagList(BaseModel):
 
 @router.get("", summary="Tags starting with a prefix, most used first", responses=problem_responses(401, 422))
 def list_tags(
-    _user: CurrentAuthentication,
+    restrictions: CurrentRestrictions,
     tags: TagsServiceDependency,
     prefix: Annotated[str, Query(max_length=200, description="May include a namespace: author:pol")] = "",
     namespace: Annotated[str | None, Query(max_length=100, description="Only this namespace")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> TagList:
-    matches = tags.autocomplete(prefix, namespace, limit)
+    is_hidden = restrictions.is_tag_hidden if restrictions.active else None  # restricted tags are never suggested
+    matches = tags.autocomplete(prefix, namespace, limit, is_hidden)
     return TagList(items=[TagWithCount(tag=str(match.tag), image_count=match.image_count) for match in matches])

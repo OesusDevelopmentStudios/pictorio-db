@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
+from pictorio_db.services.access import Restrictions
 from pictorio_db.services.images import ImageRecord, ImagesService, NewImage, duplicate_image
 from pictorio_db.services.importer._inspection import ImageFacts, file_sha256, inspect_image
 from pictorio_db.services.settings import SettingsService
@@ -66,11 +67,13 @@ class ImporterService:
         """Where to write an upload before passing it to import_image()."""
         return self._storage.new_incoming_path()
 
-    def import_image(self, incoming: Path, metadata: UploadMetadata, user_id: int | None) -> ImageRecord:
+    def import_image(
+        self, incoming: Path, metadata: UploadMetadata, user_id: int | None, restrictions: Restrictions
+    ) -> ImageRecord:
         """Takes over `incoming`: it ends up in the library or is deleted. Raises 409 duplicate_image,
-        415 unsupported_media_type, 422 checksum_mismatch or 422 invalid_tag; nothing is stored then."""
-        sha256, tags, facts = self._checked_upload(incoming, metadata)
-        taken_at = self._taken_at(metadata, facts)
+        403 tag_restricted, 415 unsupported_media_type, 422 checksum_mismatch or 422 invalid_tag; nothing is
+        stored then."""
+        sha256, tags, facts, taken_at = self._checked_upload(incoming, metadata, restrictions)
         library_path = self._storage.path_for(
             tags, taken_at.time, file_name(metadata.original_filename, sha256, facts.type.extension)
         )
@@ -85,17 +88,23 @@ class ImporterService:
 
             raise
 
-    def _checked_upload(self, incoming: Path, metadata: UploadMetadata) -> tuple[str, list[TagName], ImageFacts]:
+    def _checked_upload(
+        self, incoming: Path, metadata: UploadMetadata, restrictions: Restrictions
+    ) -> tuple[str, list[TagName], ImageFacts, TakenAt]:
         """Everything that can refuse an upload, before anything is stored."""
         try:
             sha256 = file_sha256(incoming)
             _check_client_sha256(metadata.client_sha256, sha256)
             existing_image_id = self._images.find_id_by_sha256(sha256)
             if existing_image_id is not None:
-                raise duplicate_image(sha256, existing_image_id)
+                # The user has the file already; confirming a copy exists reveals little, but not which image.
+                visible = self._images.is_visible(existing_image_id, restrictions)
+                raise duplicate_image(sha256, existing_image_id if visible else None)
 
             tags = self._tags.resolve_tags(list(metadata.tags))
             facts = inspect_image(incoming)
+            taken_at = self._taken_at(metadata, facts)
+            restrictions.check_tags_allowed(tags, taken_at.time)
         except Exception:
             incoming.unlink(missing_ok=True)
             raise
@@ -107,7 +116,7 @@ class ImporterService:
             self._thumbnails.delete_thumbnails(sha256)
             raise
 
-        return sha256, tags, facts
+        return sha256, tags, facts, taken_at
 
     def _new_image(
         self,

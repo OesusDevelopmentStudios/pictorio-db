@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from pictorio_db.services.access import AccessService
+from pictorio_db.services.access import AccessService, Restrictions
 from pictorio_db.services.auth import Authentication, AuthService, Role, not_authenticated
 from pictorio_db.services.images import ImagesService
 from pictorio_db.services.importer import ImporterService
@@ -70,6 +70,14 @@ def current_authentication(
     return auth.authenticate(credentials.credentials)
 
 
+def current_restrictions(
+    authentication: Annotated[Authentication, Depends(current_authentication)],
+    access: Annotated[AccessService, Depends(access_service)],
+) -> Restrictions:
+    """What the logged-in user may see and use; none for admins. Every image endpoint needs it."""
+    return access.restrictions_for(authentication.user)
+
+
 def current_admin(authentication: Annotated[Authentication, Depends(current_authentication)]) -> Authentication:
     """Protects an admin endpoint: other users get 403."""
     if authentication.user.role != Role.ADMIN:
@@ -89,3 +97,4 @@ StorageServiceDependency = Annotated[StorageService, Depends(storage_service)]
 ThumbnailsServiceDependency = Annotated[ThumbnailsService, Depends(thumbnails_service)]
 CurrentAuthentication = Annotated[Authentication, Depends(current_authentication)]
 CurrentAdmin = Annotated[Authentication, Depends(current_admin)]
+CurrentRestrictions = Annotated[Restrictions, Depends(current_restrictions)]

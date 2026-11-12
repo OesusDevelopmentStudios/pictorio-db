@@ -69,9 +69,16 @@ class TagsService:
         namespace, name = split_tag(text, self.namespace_names())
         return TagName(namespace, normalized_tag_name(name))
 
-    def autocomplete(self, prefix: str = "", namespace: str | None = None, limit: int = 20) -> list[TagCount]:
+    def autocomplete(
+        self,
+        prefix: str = "",
+        namespace: str | None = None,
+        limit: int = 20,
+        is_hidden: Callable[[TagName], bool] | None = None,
+    ) -> list[TagCount]:
         """Tags starting with `prefix`, most used first. "author:pol" searches one namespace, "pol" all of them.
-        `image_count` counts all images, also ones a restricted user cannot see."""
+        Tags for which `is_hidden` says so are left out (a restricted user's tags). `image_count` counts all
+        images, also ones a restricted user cannot see."""
         prefix_namespace, name_prefix = self._split_prefix(prefix)
         namespaces = {name for name in (prefix_namespace, namespace and namespace.lower()) if name}
         if len(namespaces) > 1:
@@ -84,7 +91,6 @@ class TagsService:
             .outerjoin(image_tag, image_tag.c.tag_id == Tag.id)
             .group_by(Tag.id)
             .order_by(image_count.desc(), Namespace.name, Tag.name)
-            .limit(limit)
         )
         if namespaces:
             query = query.where(Namespace.name == namespaces.pop())
@@ -92,11 +98,24 @@ class TagsService:
         if name_prefix:
             query = query.where(Tag.name >= name_prefix, Tag.name < name_prefix + _LAST_CHARACTER)
 
+        # Hidden tags are dropped after reading, so more rows are read until the page is full.
+        found: list[TagCount] = []
+        batch_size = limit if is_hidden is None else limit * 4
+        offset = 0
         with self._database.session() as session:
-            return [
-                TagCount(TagName(namespace_name, tag_name), count)
-                for namespace_name, tag_name, count in session.execute(query)
-            ]
+            while len(found) < limit:
+                rows = session.execute(query.limit(batch_size).offset(offset)).all()
+                for namespace_name, tag_name, count in rows:
+                    tag = TagName(namespace_name, tag_name)
+                    if is_hidden is None or not is_hidden(tag):
+                        found.append(TagCount(tag, count))
+
+                if len(rows) < batch_size:
+                    break
+
+                offset += batch_size
+
+        return found[:limit]
 
     def _split_prefix(self, prefix: str) -> tuple[str | None, str]:
         """Like split_tag, but text without a namespace searches all namespaces instead of general only."""
