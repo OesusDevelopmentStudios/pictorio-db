@@ -16,11 +16,13 @@ from pictorio_db.api.v1.dependencies import (
     CurrentAuthentication,
     ImagesServiceDependency,
     ImporterServiceDependency,
+    SearchServiceDependency,
     StorageServiceDependency,
     ThumbnailsServiceDependency,
 )
 from pictorio_db.services.images import ImageRecord
 from pictorio_db.services.importer import UploadMetadata
+from pictorio_db.services.search import DEFAULT_LIMIT, MAX_LIMIT, Order, SearchRequest, Sort
 from pictorio_db.services.thumbnails import THUMBNAIL_SIZES
 from pictorio_db.utils.problems import Problem, problem_responses
 from pictorio_db.utils.time import as_utc
@@ -56,6 +58,12 @@ class ImageObject(BaseModel):
     links: ImageLinks
 
 
+class ImageList(BaseModel):
+    items: list[ImageObject]
+    next_cursor: str | None = Field(description="Pass as `cursor` for the next page; null on the last page")
+    effective_query: str = Field(description="The query with the hidden-by-default filters that were added")
+
+
 class UploadMetadataModel(BaseModel):
     original_filename: str = Field(min_length=1, max_length=255, examples=["IMG_2041.jpg"])
     file_mtime: datetime | None = Field(default=None, description="The original file's modification time")
@@ -82,6 +90,28 @@ _UPLOAD_REQUEST_BODY = {
         }
     },
 }
+
+
+@router.get("", summary="Search and list images", responses=problem_responses(400, 401, 422))
+def search_images(
+    _user: CurrentAuthentication,
+    search: SearchServiceDependency,
+    images: ImagesServiceDependency,
+    q: Annotated[str, Query(max_length=2000, description="Search query, e.g. category:artwork -rating:nsfw")] = "",
+    sort: Sort = Sort.TAKEN_AT,
+    order: Annotated[Order, Query(description="Ignored for sort=random")] = Order.DESC,
+    seed: Annotated[int | None, Query(description="Required for sort=random: same seed, same order")] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    cursor: Annotated[str | None, Query(max_length=500, description="next_cursor of the previous page")] = None,
+    apply_hidden_filters: Annotated[bool, Query(description="false skips your hidden-by-default filters")] = True,
+) -> ImageList:
+    request = SearchRequest(query=q, sort=sort, order=order, seed=seed, limit=limit, cursor=cursor)
+    page = search.search(request)
+    return ImageList(
+        items=[_image_object(record) for record in images.get_images(page.image_ids)],
+        next_cursor=page.next_cursor,
+        effective_query=page.effective_query,
+    )
 
 
 @router.post(

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
+import hashlib
 from pathlib import Path
 from sqlite3 import Connection as SqliteConnection
 from typing import Any
@@ -25,3 +26,11 @@ def _configure_connection(connection: SqliteConnection, _connection_record: Any)
     # Wait for a short write by another connection instead of failing at once.
     cursor.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MILLISECONDS}")
     cursor.close()
+    connection.create_function("shuffled_position", 2, shuffled_position, deterministic=True)
+
+
+def shuffled_position(seed: int, image_id: int) -> int:
+    """A random-looking position that is always the same for the same seed and image: random order that
+    stays the same while paging. SQLite has no random function that takes a seed."""
+    digest = hashlib.blake2b(f"{seed}:{image_id}".encode(), digest_size=7).digest()  # fits SQLite's integers
+    return int.from_bytes(digest)

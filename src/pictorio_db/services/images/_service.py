@@ -63,6 +63,17 @@ class ImagesService:
 
             return _record(session, image)
 
+    def get_images(self, image_ids: list[int]) -> list[ImageRecord]:
+        """In the order of `image_ids`; ids that do not exist are left out. Tags are read in one query."""
+        with self._database.session() as session:
+            images = {image.id: image for image in session.scalars(select(Image).where(Image.id.in_(image_ids)))}
+            tags = _tags_of(session, list(images))
+            return [
+                _record_with_tags(images[image_id], tags.get(image_id, []))
+                for image_id in image_ids
+                if image_id in images
+            ]
+
     def find_id_by_sha256(self, sha256: str) -> int | None:
         with self._database.session() as session:
             return session.scalar(select(Image.id).where(Image.sha256 == sha256))
@@ -120,13 +131,26 @@ def _tag_ids(session: Session, tags: list[TagName]) -> list[int]:
 
 
 def _record(session: Session, image: Image) -> ImageRecord:
+    return _record_with_tags(image, _tags_of(session, [image.id]).get(image.id, []))
+
+
+def _tags_of(session: Session, image_ids: list[int]) -> dict[int, list[TagName]]:
+    """The tags of each image, sorted by namespace, then name."""
     tag_rows = session.execute(
-        select(Namespace.name, Tag.name)
+        select(image_tag.c.image_id, Namespace.name, Tag.name)
         .join(Tag, Tag.namespace_id == Namespace.id)
         .join(image_tag, image_tag.c.tag_id == Tag.id)
-        .where(image_tag.c.image_id == image.id)
+        .where(image_tag.c.image_id.in_(image_ids))
         .order_by(Namespace.name, Tag.name)
     )
+    tags: dict[int, list[TagName]] = {}
+    for image_id, namespace, name in tag_rows:
+        tags.setdefault(image_id, []).append(TagName(namespace, name))
+
+    return tags
+
+
+def _record_with_tags(image: Image, tags: list[TagName]) -> ImageRecord:
     return ImageRecord(
         id=image.id,
         sha256=image.sha256,
@@ -142,5 +166,5 @@ def _record(session: Session, image: Image) -> ImageRecord:
         imported_at=image.imported_at,
         updated_at=image.updated_at,
         imported_by_user_id=image.imported_by_user_id,
-        tags=[TagName(namespace, name) for namespace, name in tag_rows],
+        tags=tags,
     )

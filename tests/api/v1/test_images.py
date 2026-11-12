@@ -274,3 +274,43 @@ def test_missing_thumbnail_is_made_again(client: TestClient, headers: dict[str, 
 
     assert response.status_code == 200
     assert client.app.state.thumbnails.thumbnail_path(uploaded["sha256"], 256).exists()
+
+
+# --- Searching
+
+def test_search_needs_a_login(client: TestClient) -> None:
+    assert client.get("/api/v1/images").status_code == 401
+
+
+def test_search_returns_image_objects(client: TestClient, headers: dict[str, str], uploaded: dict) -> None:
+    response = client.get("/api/v1/images", params={"q": "category:photo summer"}, headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["items"]] == [uploaded["id"]]
+    assert body["items"][0]["tags"] == ["category:photo", "general:summer"]
+    assert body["next_cursor"] is None
+    assert body["effective_query"] == "category:photo summer"
+
+
+def test_search_pages_with_the_cursor(client: TestClient, headers: dict[str, str]) -> None:
+    for colour in ("red", "green", "blue"):
+        upload(client, headers, jpeg_bytes(colour=colour))
+
+    first = client.get("/api/v1/images", params={"limit": 2}, headers=headers).json()
+    second = client.get("/api/v1/images", params={"limit": 2, "cursor": first["next_cursor"]}, headers=headers).json()
+
+    assert len(first["items"]) == 2 and len(second["items"]) == 1
+    assert second["next_cursor"] is None
+
+
+def test_invalid_query_says_where(client: TestClient, headers: dict[str, str]) -> None:
+    response = client.get("/api/v1/images", params={"q": "summer beach,,sand"}, headers=headers)
+
+    assert response.status_code == 400
+    assert (response.json()["code"], response.json()["position"]) == ("invalid_query", 13)
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 501}, {"sort": "size"}, {"sort": "random"}])
+def test_invalid_search_parameters(client: TestClient, headers: dict[str, str], params: dict) -> None:
+    assert client.get("/api/v1/images", params=params, headers=headers).status_code == 422

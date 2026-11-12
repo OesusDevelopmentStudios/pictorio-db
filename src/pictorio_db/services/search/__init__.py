@@ -15,15 +15,31 @@ from pictorio_db.services.search._parser import (
 )
 from pictorio_db.services.search._conditions import matching_condition
 from pictorio_db.services.search._hidden_filters import FilteredQuery, apply_hidden_filters, mentioned_tags
+from pictorio_db.services.search._service import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    Order,
+    SearchPage,
+    SearchRequest,
+    SearchService,
+    Sort,
+)
 
 __all__ = [
     "DATE_FIELDS",
+    "DEFAULT_LIMIT",
+    "MAX_LIMIT",
     "All",
     "AnyOf",
     "DateMatch",
     "FilteredQuery",
     "Node",
     "Not",
+    "Order",
+    "SearchPage",
+    "SearchRequest",
+    "SearchService",
+    "Sort",
     "TagMatch",
     "apply_hidden_filters",
     "matching_condition",
