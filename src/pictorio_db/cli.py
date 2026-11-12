@@ -10,7 +10,7 @@ import sys
 import uvicorn
 
 from pictorio_db.app import create_app
-from pictorio_db.config import ConfigError, config_from_environment
+from pictorio_db.config import Config, ConfigError, config_from_environment
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -20,24 +20,33 @@ def main(arguments: list[str] | None = None) -> int:
     commands.add_parser("openapi", help="print the API schema, e.g. to update docs/openapi.json")
 
     command = parser.parse_args(arguments).command
-    if command == "serve":
-        return _serve()
-
-    return _print_openapi()
-
-
-def _serve() -> int:
     try:
         config = config_from_environment()
     except ConfigError as error:
-        print(f"pictorio-db: {error}", file=sys.stderr)
-        return 1
+        return _fail(str(error))
+
+    if command == "serve":
+        return _serve(config)
+
+    return _print_openapi(config)
+
+
+def _serve(config: Config) -> int:
+    try:
+        config.data_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        return _fail(f"cannot create the data folder {config.data_dir}: {error.strerror}")
 
     # One process: the database and the background jobs assume it.
-    uvicorn.run(create_app(), host=config.host, port=config.port)
+    uvicorn.run(create_app(config), host=config.host, port=config.port)
     return 0
 
 
-def _print_openapi() -> int:
-    print(json.dumps(create_app().openapi(), indent=2))
+def _print_openapi(config: Config) -> int:
+    print(json.dumps(create_app(config).openapi(), indent=2))
     return 0
+
+
+def _fail(message: str) -> int:
+    print(f"pictorio-db: {message}", file=sys.stderr)
+    return 1

@@ -17,6 +17,9 @@ Image=localhost/pictorio-db:latest
 ContainerName=pictorio-db
 PublishPort=8737:8737
 
+# The database; a named volume keeps it when the image is updated.
+Volume=pictorio-data:/data
+
 # The container runs as UID 1000; this maps your user to it, so files it writes belong to you.
 UserNS=keep-id:uid=1000,gid=1000
 

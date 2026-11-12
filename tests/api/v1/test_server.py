@@ -4,12 +4,9 @@
 from fastapi.testclient import TestClient
 
 import pictorio_db
-from pictorio_db.app import create_app
 
 
-def test_server_info_is_public_and_names_the_server() -> None:
-    client = TestClient(create_app())
-
+def test_server_info_is_public_and_names_the_server(client: TestClient) -> None:
     response = client.get("/api/v1/server/info")
 
     assert response.status_code == 200
