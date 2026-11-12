@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
-from pictorio_db.api.v1.dependencies import AuthServiceDependency, CurrentAuthentication
+from pictorio_db.api.v1.dependencies import AccessServiceDependency, AuthServiceDependency, CurrentAuthentication
 from pictorio_db.services.auth import PASSWORD_MAX_LENGTH, Role, TokenInfo, UserInfo
 from pictorio_db.utils.problems import problem_responses
 from pictorio_db.utils.time import as_utc
@@ -60,9 +60,11 @@ def create_token(login: LoginRequest, auth: AuthServiceDependency) -> CreatedTok
 
 
 @router.get("/me", summary="The logged-in user", responses=problem_responses(401))
-def current_user(authentication: CurrentAuthentication) -> CurrentUser:
+def current_user(authentication: CurrentAuthentication, access: AccessServiceDependency) -> CurrentUser:
+    """restricted_tags lets the app warn before an upload or tag change would be refused; [] for admins."""
     user = authentication.user
-    return CurrentUser(id=user.id, username=user.username, role=user.role, restricted_tags=[])
+    restricted_tags = [] if user.role == Role.ADMIN else access.restricted_terms(user.id)
+    return CurrentUser(id=user.id, username=user.username, role=user.role, restricted_tags=restricted_tags)
 
 
 @router.get("/tokens", summary="The logged-in user's devices", responses=problem_responses(401))

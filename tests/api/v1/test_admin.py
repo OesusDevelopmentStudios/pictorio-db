@@ -116,3 +116,59 @@ def test_the_last_admin_cannot_delete_themselves(client: TestClient, admin_heade
 
     assert response.status_code == 409
     assert response.json()["code"] == "last_admin"
+
+
+# --- Restricted tags
+
+def create(client: TestClient, admin_headers: dict[str, str], body: dict) -> object:
+    return client.post("/api/v1/admin/users", json={"password": PASSWORD, "role": "user"} | body, headers=admin_headers)
+
+
+def test_creates_a_user_with_restricted_tags(client: TestClient, admin_headers: dict[str, str]) -> None:
+    response = create(client, admin_headers, {"username": "kid", "restricted_tags": ["rating:nsfw", "character:*"]})
+
+    assert response.status_code == 201
+    assert response.json()["restricted_tags"] == ["character:*", "rating:nsfw"]
+    assert response.json()["restrictions_active"] is True
+
+
+def test_invalid_term_creates_no_user(client: TestClient, auth: AuthService, admin_headers: dict[str, str]) -> None:
+    response = create(client, admin_headers, {"username": "kid", "restricted_tags": ["rating:nsfw", "-x"]})
+
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["field"] == "body.restricted_tags.1"
+    assert [user.username for user in auth.list_users()] == ["apo"]
+
+
+def test_patch_replaces_or_keeps_restricted_tags(client: TestClient, admin_headers: dict[str, str]) -> None:
+    user_id = create(client, admin_headers, {"username": "kid", "restricted_tags": ["rating:nsfw"]}).json()["id"]
+
+    replaced = client.patch(
+        f"/api/v1/admin/users/{user_id}", json={"restricted_tags": ["category:refs"]}, headers=admin_headers
+    )
+    kept = client.patch(f"/api/v1/admin/users/{user_id}", json={"password": "another password"}, headers=admin_headers)
+
+    assert replaced.json()["restricted_tags"] == ["category:refs"]
+    assert kept.json()["restricted_tags"] == ["category:refs"]
+
+
+def test_invalid_term_changes_nothing(client: TestClient, admin_headers: dict[str, str]) -> None:
+    user_id = create(client, admin_headers, {"username": "kid", "restricted_tags": ["rating:nsfw"]}).json()["id"]
+
+    response = client.patch(
+        f"/api/v1/admin/users/{user_id}", json={"role": "admin", "restricted_tags": ["(a"]}, headers=admin_headers
+    )
+
+    assert response.status_code == 422
+    users = client.get("/api/v1/admin/users", headers=admin_headers).json()
+    user = next(user for user in users if user["id"] == user_id)
+    assert (user["role"], user["restricted_tags"]) == ("user", ["rating:nsfw"])
+
+
+def test_restricted_tags_of_an_admin_are_kept_but_inactive(client: TestClient, admin_headers: dict[str, str]) -> None:
+    body = {"username": "second", "role": "admin", "restricted_tags": ["rating:nsfw"]}
+
+    response = create(client, admin_headers, body)
+
+    assert response.json()["restricted_tags"] == ["rating:nsfw"]
+    assert response.json()["restrictions_active"] is False

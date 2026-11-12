@@ -131,6 +131,7 @@
           "auth"
         ],
         "summary": "The logged-in user",
+        "description": "restricted_tags lets the app warn before an upload or tag change would be refused; [] for admins.",
         "operationId": "current_user_api_v1_auth_me_get",
         "responses": {
           "200": {
@@ -1328,7 +1329,7 @@
         "tags": [
           "admin"
         ],
-        "summary": "Change a user's password or role",
+        "summary": "Change a user's password, role or restricted tags",
         "operationId": "update_user_api_v1_admin_users__user_id__patch",
         "security": [
           {
@@ -1950,6 +1951,16 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role"
+          },
+          "restricted_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Restricted Tags",
+            "description": "Search terms, e.g. rating:nsfw or character:*; ignored for admins",
+            "default": []
           }
         },
         "type": "object",
@@ -2174,6 +2185,22 @@
                 "type": "null"
               }
             ]
+          },
+          "restricted_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restricted Tags",
+            "description": "Replaces the whole list. Search terms, e.g. rating:nsfw or character:*; ignored for admins"
           }
         },
         "type": "object",

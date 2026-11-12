@@ -15,6 +15,7 @@ from pictorio_db import admin_web
 from pictorio_db.api import v1
 from pictorio_db.config import Config
 from pictorio_db.db import DATABASE_FILE_NAME, open_database
+from pictorio_db.services.access import AccessService
 from pictorio_db.services.auth import AuthService
 from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
@@ -63,6 +64,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         app.state.images = ImagesService(database, app.state.tags, app.state.storage)
         app.state.search = SearchService(database, app.state.tags.namespace_names)
         app.state.preferences = PreferencesService(database, app.state.tags.namespace_names)
+        app.state.access = AccessService(database, app.state.tags.namespace_names)
         app.state.importer = ImporterService(
             app.state.images, app.state.tags, app.state.storage, app.state.thumbnails, settings
         )

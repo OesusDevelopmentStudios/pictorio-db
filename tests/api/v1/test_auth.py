@@ -138,3 +138,21 @@ def test_cannot_revoke_another_users_token(client: TestClient, auth: AuthService
 
     assert response.status_code == 404
     assert client.get("/api/v1/auth/me", headers=bearer(kids_token)).status_code == 200
+
+
+def test_me_lists_the_users_restricted_tags(client: TestClient, auth: AuthService) -> None:
+    kid = auth.create_user("kid", PASSWORD, Role.USER)
+    client.app.state.access.set_restricted_terms(kid.id, ["rating:nsfw"])
+
+    response = client.get("/api/v1/auth/me", headers=bearer(log_in(client, "kid")))
+
+    assert response.json()["restricted_tags"] == ["rating:nsfw"]
+
+
+def test_me_lists_no_restricted_tags_for_admins(client: TestClient, auth: AuthService) -> None:
+    admin = auth.create_user("apo", PASSWORD, Role.ADMIN)
+    client.app.state.access.set_restricted_terms(admin.id, ["rating:nsfw"])
+
+    response = client.get("/api/v1/auth/me", headers=bearer(log_in(client, "apo")))
+
+    assert response.json()["restricted_tags"] == []

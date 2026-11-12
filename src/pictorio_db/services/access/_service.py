@@ -77,9 +77,13 @@ class AccessService:
             terms = select(UserRestriction.term).where(UserRestriction.user_id == user_id)
             return list(session.scalars(terms.order_by(UserRestriction.term)))
 
+    def checked_terms(self, terms: list[str]) -> list[str]:
+        """Trimmed, sorted, without repeats. Raises 422 validation_error; call it before changing anything."""
+        return sorted(set(checked_terms(terms, "body.restricted_tags", self._namespace_names())))
+
     def set_restricted_terms(self, user_id: int, terms: list[str]) -> list[str]:
         """Replaces the whole list. Terms may name tags that do not exist yet. Raises 422 validation_error."""
-        cleaned = sorted(set(checked_terms(terms, "body.restricted_tags", self._namespace_names())))
+        cleaned = self.checked_terms(terms)
         with self._database.session() as session:
             session.execute(delete(UserRestriction).where(UserRestriction.user_id == user_id))
             session.add_all(UserRestriction(user_id=user_id, term=term) for term in cleaned)
