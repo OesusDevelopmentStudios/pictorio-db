@@ -256,3 +256,77 @@ def test_successful_login_resets_the_failure_count(auth: AuthService) -> None:
     fail_logins(auth, 9)
 
     auth.create_token("kid", PASSWORD, "laptop")  # 18 failures in all, but never 10 in a row
+
+
+# --- Managing users
+
+def test_lists_users_by_name(auth: AuthService) -> None:
+    auth.create_user("kid", PASSWORD, Role.USER)
+    auth.create_user("apo", PASSWORD, Role.ADMIN)
+
+    assert [user.username for user in auth.list_users()] == ["apo", "kid"]
+
+
+def test_new_password_replaces_the_old_and_logs_out_everywhere(auth: AuthService) -> None:
+    kid = auth.create_user("kid", PASSWORD, Role.USER)
+    old_token = auth.create_token("kid", PASSWORD, "laptop")
+
+    auth.update_user(kid.id, password="a brand new password")
+
+    assert raised_problem(lambda: auth.authenticate(old_token.token)).status == 401
+    assert raised_problem(lambda: auth.create_token("kid", PASSWORD, "laptop")).status == 401
+    auth.create_token("kid", "a brand new password", "laptop")
+
+
+def test_can_make_a_user_admin(auth: AuthService) -> None:
+    kid = auth.create_user("kid", PASSWORD, Role.USER)
+
+    assert auth.update_user(kid.id, role=Role.ADMIN).role == Role.ADMIN
+
+
+def test_last_admin_cannot_become_a_normal_user(auth: AuthService) -> None:
+    admin = auth.create_user("apo", PASSWORD, Role.ADMIN)
+
+    problem = raised_problem(lambda: auth.update_user(admin.id, role=Role.USER))
+
+    assert (problem.status, problem.code) == (409, "last_admin")
+    assert auth.list_users()[0].role == Role.ADMIN
+
+
+def test_deleting_a_user_removes_their_tokens(auth: AuthService) -> None:
+    kid = auth.create_user("kid", PASSWORD, Role.USER)
+    token = auth.create_token("kid", PASSWORD, "laptop")
+
+    auth.delete_user(kid.id)
+
+    assert auth.list_users() == []
+    assert raised_problem(lambda: auth.authenticate(token.token)).status == 401
+
+
+def test_last_admin_cannot_be_deleted_but_another_can(auth: AuthService) -> None:
+    first_admin = auth.create_user("apo", PASSWORD, Role.ADMIN)
+
+    assert raised_problem(lambda: auth.delete_user(first_admin.id)).code == "last_admin"
+
+    second_admin = auth.create_user("second", PASSWORD, Role.ADMIN)
+    auth.delete_user(first_admin.id)
+    assert [user.id for user in auth.list_users()] == [second_admin.id]
+
+
+@pytest.mark.parametrize("action", ["update", "delete"])
+def test_unknown_user_is_not_found(auth: AuthService, action: str) -> None:
+    def change_unknown_user() -> None:
+        if action == "update":
+            auth.update_user(999, role=Role.ADMIN)
+        else:
+            auth.delete_user(999)
+
+    problem = raised_problem(change_unknown_user)
+
+    assert (problem.status, problem.code) == (404, "not_found")
+
+
+def test_new_password_must_be_long_enough(auth: AuthService) -> None:
+    kid = auth.create_user("kid", PASSWORD, Role.USER)
+
+    assert raised_problem(lambda: auth.update_user(kid.id, password="short")).code == "validation_error"

@@ -111,6 +111,36 @@ class AuthService:
 
             return _user_info(user)
 
+    def list_users(self) -> list[UserInfo]:
+        with self._database.session() as session:
+            return [_user_info(user) for user in session.scalars(select(User).order_by(User.username))]
+
+    def update_user(self, user_id: int, password: str | None = None, role: Role | None = None) -> UserInfo:
+        """A new password also logs the user out everywhere: an admin sets one when the old one leaked."""
+        if password is not None:
+            check_password(password)
+
+        with self._database.session() as session:
+            user = _existing_user(session, user_id)
+            was_admin = user.role == Role.ADMIN
+            if password is not None:
+                user.password_hash = hash_password(password)
+                session.execute(delete(ApiToken).where(ApiToken.user_id == user_id))
+
+            if role is not None:
+                user.role = role
+
+            self._commit_keeping_an_admin(session, was_admin)
+            return _user_info(user)
+
+    def delete_user(self, user_id: int) -> None:
+        """Their tokens go with them."""
+        with self._database.session() as session:
+            user = _existing_user(session, user_id)
+            was_admin = user.role == Role.ADMIN
+            session.delete(user)
+            self._commit_keeping_an_admin(session, was_admin)
+
     # --- Logins
 
     def create_token(self, username: str, password: str, device_name: str) -> NewToken:
@@ -183,6 +213,17 @@ class AuthService:
     def _admin_count(session: Session) -> int:
         return session.scalar(select(func.count()).select_from(User).where(User.role == Role.ADMIN)) or 0
 
+    # Only a change to an admin can remove the last one. Counted after the change, in the same transaction,
+    # so two requests at once cannot remove the last two admins between them.
+    def _commit_keeping_an_admin(self, session: Session, changed_user_was_admin: bool) -> None:
+        session.flush()
+        if changed_user_was_admin and self._admin_count(session) == 0:
+            session.rollback()
+            raise Problem(409, "last_admin", "The last admin cannot be removed",
+                          "Make another user an admin first.")
+
+        session.commit()
+
 
 def not_authenticated() -> Problem:
     return Problem(
@@ -192,6 +233,14 @@ def not_authenticated() -> Problem:
         "Wrong username or password, or the token is unknown or revoked.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _existing_user(session: Session, user_id: int) -> User:
+    user = session.get(User, user_id)
+    if user is None:
+        raise Problem(404, "not_found", "User not found")
+
+    return user
 
 
 def _user_info(user: User) -> UserInfo:
