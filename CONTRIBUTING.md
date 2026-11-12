@@ -19,6 +19,7 @@ never seen it before.
 src/pictorio_db/
 ├── app.py          creates the services and the web application; contains no logic of its own
 ├── config.py       settings read from environment variables at startup
+├── db/             database tables (models.py), connection and migrations
 ├── api/v1/         REST API: one router per resource
 ├── admin_web/      web admin pages
 ├── services/       one package per service, each with a single responsibility
@@ -40,6 +41,21 @@ services/<service_name>/       snake_case, e.g. services/tags/
 
 - Services never create each other. `app.py` creates them and passes in their dependencies, so
   tests can pass in fakes.
+
+## Database changes
+
+The schema changes only through Alembic migrations in `src/pictorio_db/db/migrations/versions/`,
+one migration per reviewable change. The server applies them itself when it starts.
+
+1. Change the tables in `src/pictorio_db/db/models.py`.
+2. Let Alembic write the migration. It compares the models with `migration-dev.sqlite3` in the
+   repository root (ignored by git), so bring that file up to date first. Use the next number as id:
+   ```sh
+   alembic upgrade head
+   alembic revision --autogenerate --rev-id 0002 -m "short description"
+   ```
+3. Read the generated file and tidy it up; it is code like any other.
+4. `pytest` fails if the models and the migrations do not describe the same schema.
 
 ## Python style
 

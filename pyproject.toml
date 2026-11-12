@@ -18,6 +18,8 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.162.5",  # REST API, request/response models, OpenAPI schema
     "uvicorn==0.54.0",   # ASGI server that runs the FastAPI app
+    "sqlalchemy==2.1.8",  # database access (SQLite)
+    "alembic==1.20.1",    # database schema migrations
 ]
 
 [project.scripts]
@@ -32,6 +34,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"pictorio_db.db" = ["migrations/script.py.mako"]  # template for new migrations
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

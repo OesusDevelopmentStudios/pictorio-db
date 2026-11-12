@@ -13,3 +13,4 @@ dist/
 
 # Editor settings
 .vscode/
+migration-dev.sqlite3*
