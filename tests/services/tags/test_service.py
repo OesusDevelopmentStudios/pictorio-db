@@ -105,3 +105,23 @@ def test_new_namespace_becomes_a_tag_prefix(tags: TagsService) -> None:
     tags.create_namespace("weather", single_value=False)
 
     assert tags.parse_tag("weather:sunny") == TagName("weather", "sunny")
+
+
+# --- Resolving the tags given for an image
+
+def test_resolve_keeps_each_tag_once_in_the_given_order(tags: TagsService) -> None:
+    resolved = tags.resolve_tags(["summer", "Beach", "general:summer"])
+
+    assert [str(tag) for tag in resolved] == ["general:summer", "general:beach"]
+
+
+def test_resolve_keeps_the_last_tag_of_a_single_value_namespace(tags: TagsService) -> None:
+    resolved = tags.resolve_tags(["category:photo", "summer", "category:artwork", "rating:sfw"])
+
+    assert [str(tag) for tag in resolved] == ["general:summer", "category:artwork", "rating:sfw"]
+
+
+def test_resolve_keeps_every_tag_of_a_multi_value_namespace(tags: TagsService) -> None:
+    resolved = tags.resolve_tags(["author:first_artist", "author:second_artist"])
+
+    assert [str(tag) for tag in resolved] == ["author:first_artist", "author:second_artist"]

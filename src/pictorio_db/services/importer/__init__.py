@@ -10,5 +10,21 @@ from pictorio_db.services.importer._inspection import (
     file_sha256,
     inspect_image,
 )
+from pictorio_db.services.importer._service import (
+    DEFAULT_MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_BYTES_SETTING,
+    ImporterService,
+    UploadMetadata,
+)
 
-__all__ = ["SUPPORTED_TYPES", "ImageFacts", "ImageType", "file_sha256", "inspect_image"]
+__all__ = [
+    "DEFAULT_MAX_UPLOAD_BYTES",
+    "MAX_UPLOAD_BYTES_SETTING",
+    "SUPPORTED_TYPES",
+    "ImageFacts",
+    "ImageType",
+    "ImporterService",
+    "UploadMetadata",
+    "file_sha256",
+    "inspect_image",
+]

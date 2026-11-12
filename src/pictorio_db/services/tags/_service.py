@@ -46,6 +46,24 @@ class TagsService:
         self._database = database
         self._path_template_namespaces = path_template_namespaces
 
+    def resolve_tags(self, texts: list[str]) -> list[TagName]:
+        """Parses tags as given for an image: each tag once, and in a single-value namespace only the last
+        one, because a later tag replaces an earlier one (category:photo, category:artwork → artwork)."""
+        tags = [self.parse_tag(text) for text in texts]
+        single_value = {namespace.name for namespace in self.list_namespaces() if namespace.single_value}
+        kept: list[TagName] = []
+        seen_single_value: set[str] = set()
+        for tag in reversed(list(dict.fromkeys(tags))):
+            if tag.namespace in single_value:
+                if tag.namespace in seen_single_value:
+                    continue
+
+                seen_single_value.add(tag.namespace)
+
+            kept.append(tag)
+
+        return kept[::-1]
+
     def parse_tag(self, text: str) -> TagName:
         """"Author:Sample Artist" → author:sample_artist. Raises 422 invalid_tag."""
         namespace, name = split_tag(text, self.namespace_names())

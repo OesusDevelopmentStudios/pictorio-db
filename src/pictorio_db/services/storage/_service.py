@@ -3,6 +3,9 @@
 
 import errno
 import logging
+import os
+import shutil
+import uuid
 from collections.abc import Callable, Collection
 from pathlib import Path, PurePosixPath
 
@@ -16,6 +19,7 @@ from pictorio_db.services.storage._paths import DEFAULT_PATH_TEMPLATE, PathTempl
 from pictorio_db.utils.time import utc_now
 
 PATH_TEMPLATE_SETTING = "path_template"
+INCOMING_FOLDER = ".incoming"
 
 _logger = logging.getLogger(__name__)
 
@@ -51,6 +55,42 @@ class StorageService:
         template = parse_path_template(text.strip(), self._namespace_names())
         self._settings.set(PATH_TEMPLATE_SETTING, template.text)
         return template
+
+    # --- New files
+
+    def new_incoming_path(self) -> Path:
+        """A new, unused file name for an upload to arrive in."""
+        incoming_dir = self.library_dir / INCOMING_FOLDER
+        incoming_dir.mkdir(parents=True, exist_ok=True)
+        return incoming_dir / f"{uuid.uuid4().hex}.upload"
+
+    def store_incoming(self, incoming: Path, library_path: PurePosixPath) -> PurePosixPath:
+        """Moves a complete upload to its place in the library and returns that place. Another file with the
+        same name (practically impossible, as names contain the SHA-256) gets a number added: name_2.jpg."""
+        with incoming.open("rb") as incoming_file:
+            os.fsync(incoming_file.fileno())  # the data is on the disk before the file appears in the library
+
+        stored_path = self._free_library_path(library_path)
+        move_file(incoming, self.absolute_path(stored_path))
+        return stored_path
+
+    def delete_library_file(self, library_path: PurePosixPath | str) -> None:
+        file_path = self.absolute_path(library_path)
+        file_path.unlink(missing_ok=True)
+        remove_empty_folders(file_path.parent, self.library_dir)
+
+    def clean_incoming(self) -> None:
+        """Run at startup: removes uploads that were interrupted."""
+        shutil.rmtree(self.library_dir / INCOMING_FOLDER, ignore_errors=True)
+
+    def _free_library_path(self, library_path: PurePosixPath) -> PurePosixPath:
+        candidate = library_path
+        number = 1
+        while self.absolute_path(candidate).exists():
+            number += 1
+            candidate = library_path.with_stem(f"{library_path.stem}_{number}")
+
+        return candidate
 
     # --- Moving files
 
