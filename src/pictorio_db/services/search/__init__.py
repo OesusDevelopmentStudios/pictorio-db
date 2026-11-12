@@ -13,5 +13,20 @@ from pictorio_db.services.search._parser import (
     TagMatch,
     parse_query,
 )
+from pictorio_db.services.search._conditions import matching_condition
+from pictorio_db.services.search._hidden_filters import FilteredQuery, apply_hidden_filters, mentioned_tags
 
-__all__ = ["DATE_FIELDS", "All", "AnyOf", "DateMatch", "Node", "Not", "TagMatch", "parse_query"]
+__all__ = [
+    "DATE_FIELDS",
+    "All",
+    "AnyOf",
+    "DateMatch",
+    "FilteredQuery",
+    "Node",
+    "Not",
+    "TagMatch",
+    "apply_hidden_filters",
+    "matching_condition",
+    "mentioned_tags",
+    "parse_query",
+]
