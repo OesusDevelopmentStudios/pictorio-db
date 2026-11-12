@@ -130,3 +130,10 @@ class FileMove(Base):
     from_path: Mapped[str]  # relative to the library folder
     to_path: Mapped[str]  # relative to the library folder
     created_at: Mapped[datetime]  # UTC
+
+
+class UserPreferences(Base):
+    __tablename__ = "user_pref"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    hidden_filters: Mapped[list[str]] = mapped_column(JSON)  # search terms hidden from the default view

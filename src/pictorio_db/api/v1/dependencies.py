@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pictorio_db.services.auth import Authentication, AuthService, Role, not_authenticated
 from pictorio_db.services.images import ImagesService
 from pictorio_db.services.importer import ImporterService
+from pictorio_db.services.preferences import PreferencesService
 from pictorio_db.services.search import SearchService
 from pictorio_db.services.storage import StorageService
 from pictorio_db.services.tags import TagsService
@@ -35,6 +36,10 @@ def images_service(request: Request) -> ImagesService:
 
 def importer_service(request: Request) -> ImporterService:
     return request.app.state.importer
+
+
+def preferences_service(request: Request) -> PreferencesService:
+    return request.app.state.preferences
 
 
 def search_service(request: Request) -> SearchService:
@@ -72,6 +77,7 @@ AuthServiceDependency = Annotated[AuthService, Depends(auth_service)]
 TagsServiceDependency = Annotated[TagsService, Depends(tags_service)]
 ImagesServiceDependency = Annotated[ImagesService, Depends(images_service)]
 ImporterServiceDependency = Annotated[ImporterService, Depends(importer_service)]
+PreferencesServiceDependency = Annotated[PreferencesService, Depends(preferences_service)]
 SearchServiceDependency = Annotated[SearchService, Depends(search_service)]
 StorageServiceDependency = Annotated[StorageService, Depends(storage_service)]
 ThumbnailsServiceDependency = Annotated[ThumbnailsService, Depends(thumbnails_service)]

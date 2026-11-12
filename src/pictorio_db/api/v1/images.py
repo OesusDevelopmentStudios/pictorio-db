@@ -16,6 +16,7 @@ from pictorio_db.api.v1.dependencies import (
     CurrentAuthentication,
     ImagesServiceDependency,
     ImporterServiceDependency,
+    PreferencesServiceDependency,
     SearchServiceDependency,
     StorageServiceDependency,
     ThumbnailsServiceDependency,
@@ -94,9 +95,10 @@ _UPLOAD_REQUEST_BODY = {
 
 @router.get("", summary="Search and list images", responses=problem_responses(400, 401, 422))
 def search_images(
-    _user: CurrentAuthentication,
+    authentication: CurrentAuthentication,
     search: SearchServiceDependency,
     images: ImagesServiceDependency,
+    preferences: PreferencesServiceDependency,
     q: Annotated[str, Query(max_length=2000, description="Search query, e.g. category:artwork -rating:nsfw")] = "",
     sort: Sort = Sort.TAKEN_AT,
     order: Annotated[Order, Query(description="Ignored for sort=random")] = Order.DESC,
@@ -105,7 +107,10 @@ def search_images(
     cursor: Annotated[str | None, Query(max_length=500, description="next_cursor of the previous page")] = None,
     apply_hidden_filters: Annotated[bool, Query(description="false skips your hidden-by-default filters")] = True,
 ) -> ImageList:
-    request = SearchRequest(query=q, sort=sort, order=order, seed=seed, limit=limit, cursor=cursor)
+    hidden_filters = preferences.hidden_filters(authentication.user.id) if apply_hidden_filters else []
+    request = SearchRequest(
+        query=q, sort=sort, order=order, seed=seed, limit=limit, cursor=cursor, hidden_filters=tuple(hidden_filters)
+    )
     page = search.search(request)
     return ImageList(
         items=[_image_object(record) for record in images.get_images(page.image_ids)],
