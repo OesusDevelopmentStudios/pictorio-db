@@ -137,3 +137,12 @@ class UserPreferences(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
     hidden_filters: Mapped[list[str]] = mapped_column(JSON)  # search terms hidden from the default view
+
+
+class UserRestriction(Base):
+    """A search term naming images this user may not see, find, download, upload or tag."""
+
+    __tablename__ = "user_restriction"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    term: Mapped[str] = mapped_column(primary_key=True)

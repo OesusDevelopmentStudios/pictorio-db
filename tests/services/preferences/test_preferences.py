@@ -64,9 +64,9 @@ def test_go_with_the_user(preferences: PreferencesService, user_ids: list[int], 
     [
         (["rating:nsfw category:refs"], "body.hidden_filters.0", "One search term: no spaces"),
         (["rating:sfw", ""], "body.hidden_filters.1", "One search term: no spaces"),
-        (["-rating:nsfw"], "body.hidden_filters.0", "Write the term without '-'"),
+        (["-rating:nsfw"], "body.hidden_filters.0", "Write the term without a leading '-'"),
         (["a,,b"], "body.hidden_filters.0", "Expected a value (at position 2)"),
-        ([f"tag_{number}" for number in range(51)], "body.hidden_filters", "At most 50 filters."),
+        ([f"tag_{number}" for number in range(51)], "body.hidden_filters", "At most 50 terms."),
     ],
 )
 def test_refuses_what_is_not_one_valid_term(

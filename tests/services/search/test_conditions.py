@@ -10,7 +10,15 @@ from sqlalchemy import select
 
 from pictorio_db.db import Database
 from pictorio_db.db.models import Image, Namespace, Tag, image_tag
-from pictorio_db.services.search import TagMatch, apply_hidden_filters, matching_condition, mentioned_tags, parse_query
+from pictorio_db.services.search import (
+    TagMatch,
+    apply_hidden_filters,
+    matching_condition,
+    mentioned_tags,
+    parse_query,
+    tree_matches,
+)
+from pictorio_db.services.tags import TagName
 
 NAMESPACES = {"category", "author", "character", "rating", "album", "general"}
 
@@ -151,3 +159,20 @@ def test_lists_the_tags_a_query_mentions() -> None:
         TagMatch("rating", "nsfw"),
         TagMatch("album", "a", any_name_starting=True),
     ]
+
+
+# --- The same meaning without the database
+
+@pytest.mark.parametrize(
+    "query",
+    ["category:artwork", "-rating:nsfw|questionable", "author:pol*,mar*", "character:*", "year:2025", "summer,hero"],
+)
+def test_tree_matches_agrees_with_the_database(library: Database, query: str) -> None:
+    tree = parse_query(query, NAMESPACES)
+    in_memory = {
+        name
+        for name, (tag_texts, taken_at) in LIBRARY.items()
+        if tree_matches(tree, [TagName(*text.split(":")) for text in tag_texts], taken_at)
+    }
+
+    assert in_memory == found(library, query)

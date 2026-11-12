@@ -15,6 +15,7 @@ from pictorio_db.services.search._parser import (
 )
 from pictorio_db.services.search._conditions import matching_condition
 from pictorio_db.services.search._hidden_filters import FilteredQuery, apply_hidden_filters, mentioned_tags
+from pictorio_db.services.search._terms import MAX_TERMS, TERM_MAX_LENGTH, checked_terms, tree_matches
 from pictorio_db.services.search._service import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -29,6 +30,8 @@ __all__ = [
     "DATE_FIELDS",
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
+    "MAX_TERMS",
+    "TERM_MAX_LENGTH",
     "All",
     "AnyOf",
     "DateMatch",
@@ -42,7 +45,9 @@ __all__ = [
     "Sort",
     "TagMatch",
     "apply_hidden_filters",
+    "checked_terms",
     "matching_condition",
     "mentioned_tags",
     "parse_query",
+    "tree_matches",
 ]
