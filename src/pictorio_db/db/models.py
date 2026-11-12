@@ -74,6 +74,7 @@ class Image(Base):
     taken_at_utc_offset_minutes: Mapped[int | None]  # from EXIF OffsetTimeOriginal, if present
     imported_at: Mapped[datetime]  # UTC
     updated_at: Mapped[datetime]  # UTC
+    imported_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
 
 
 image_tag = Table(
