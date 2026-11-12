@@ -12,6 +12,7 @@ import pictorio_db
 from pictorio_db.api import v1
 from pictorio_db.config import Config
 from pictorio_db.db import DATABASE_FILE_NAME, open_database
+from pictorio_db.utils.problems import install_problem_handlers
 
 
 def create_app(config: Config) -> FastAPI:
@@ -25,6 +26,7 @@ def create_app(config: Config) -> FastAPI:
         redoc_url=None,
         lifespan=_lifespan(config),
     )
+    install_problem_handlers(app)  # every error is answered as RFC 9457 Problem Details
     app.include_router(v1.router)
     return app
 

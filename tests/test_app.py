@@ -23,3 +23,11 @@ def test_starting_creates_the_database(config: Config) -> None:
 
     assert (config.data_dir / DATABASE_FILE_NAME).exists()
     assert "general" in namespace_names
+
+
+def test_errors_are_problem_details(client: TestClient) -> None:
+    response = client.get("/api/v1/no-such-endpoint")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "not_found"
