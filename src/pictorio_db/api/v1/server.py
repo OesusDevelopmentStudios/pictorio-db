@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 import pictorio_db
+from pictorio_db.api.v1.dependencies import AuthServiceDependency
 
 SERVER_NAME = "pictorio-db"
 API_VERSION = 1
@@ -22,10 +23,10 @@ class ServerInfo(BaseModel):
 
 
 @router.get("/info", summary="Server name and versions (public)")
-def server_info() -> ServerInfo:
+def server_info(auth: AuthServiceDependency) -> ServerInfo:
     return ServerInfo(
         name=SERVER_NAME,
         version=pictorio_db.__version__,
         api_version=API_VERSION,
-        setup_required=True,  # there are no user accounts yet
+        setup_required=auth.is_setup_required(),
     )

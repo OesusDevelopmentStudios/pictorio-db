@@ -10,7 +10,7 @@ from pictorio_db.services.auth._service import (
     Role,
     TokenInfo,
     UserInfo,
-    utc_now,
+    not_authenticated,
 )
 from pictorio_db.services.auth._validation import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
 
@@ -23,5 +23,5 @@ __all__ = [
     "Role",
     "TokenInfo",
     "UserInfo",
-    "utc_now",
+    "not_authenticated",
 ]

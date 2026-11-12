@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
@@ -26,6 +27,39 @@ _CODES_FOR_HTTP_STATUS = {
 }
 
 _logger = logging.getLogger(__name__)
+
+
+class ProblemModel(BaseModel):
+    """How a problem looks, for the API documentation. Some codes add fields of their own."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str
+    title: str
+    status: int
+    code: str
+    detail: str | None = None
+
+
+class FieldError(BaseModel):
+    field: str
+    message: str
+
+
+class ValidationProblemModel(ProblemModel):
+    errors: list[FieldError]
+
+
+def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """Documents the given error statuses of an endpoint as problem responses."""
+    return {
+        status: {
+            "model": ValidationProblemModel if status == 422 else ProblemModel,
+            "content": {PROBLEM_MEDIA_TYPE: {}},
+            "description": "Problem details (RFC 9457)",
+        }
+        for status in statuses
+    }
 
 
 class Problem(Exception):
@@ -55,6 +89,26 @@ def install_problem_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _handle_http_exception)
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.add_exception_handler(Exception, _handle_unexpected_error)
+    _document_problems_with_their_media_type(app)
+
+
+# FastAPI documents every response schema under application/json. Problems are sent as
+# application/problem+json, so their schema is moved there.
+def _document_problems_with_their_media_type(app: FastAPI) -> None:
+    generate_openapi = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        schema = generate_openapi()  # FastAPI caches it, so this runs once in effect
+        for path_item in schema.get("paths", {}).values():
+            for operation in path_item.values():
+                for response in operation.get("responses", {}).values():
+                    content = response.get("content", {})
+                    if PROBLEM_MEDIA_TYPE in content and "application/json" in content:
+                        content[PROBLEM_MEDIA_TYPE] = content.pop("application/json")
+
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]
 
 
 def problem_response(problem: Problem) -> JSONResponse:
@@ -92,7 +146,7 @@ async def _handle_validation_error(_request: Request, error: RequestValidationEr
     )
 
 
-# A bug: the client gets an id to report, and the full trace goes to the log under that id.
+# The client gets an id to report, and the full trace goes to the log under that id.
 async def _handle_unexpected_error(_request: Request, error: Exception) -> JSONResponse:
     trace_id = uuid.uuid4().hex
     _logger.error("Unexpected error, trace id %s", trace_id, exc_info=error)

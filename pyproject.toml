@@ -41,3 +41,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Test files mirror the source files, so names repeat (tests/api/v1/test_auth.py, tests/services/auth/test_auth.py).
+addopts = ["--import-mode=importlib"]

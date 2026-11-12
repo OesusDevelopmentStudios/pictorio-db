@@ -5,7 +5,8 @@
 
 from fastapi import APIRouter
 
-from pictorio_db.api.v1 import server
+from pictorio_db.api.v1 import auth, server
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(server.router)
+router.include_router(auth.router)

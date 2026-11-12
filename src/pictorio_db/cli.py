@@ -5,6 +5,7 @@
 
 import argparse
 import json
+import logging
 import sys
 
 import uvicorn
@@ -36,6 +37,9 @@ def _serve(config: Config) -> int:
         config.data_dir.mkdir(parents=True, exist_ok=True)
     except OSError as error:
         return _fail(f"cannot create the data folder {config.data_dir}: {error.strerror}")
+
+    # Our messages appear in the same style as Uvicorn's, e.g. "WARNING:  ..."
+    logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(message)s")
 
     # One process: the database and the background jobs assume it.
     uvicorn.run(create_app(config), host=config.host, port=config.port)

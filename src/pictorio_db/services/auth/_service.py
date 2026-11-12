@@ -3,7 +3,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import delete, func, select
@@ -18,6 +18,7 @@ from pictorio_db.services.auth._setup_code import generate_setup_code, setup_cod
 from pictorio_db.services.auth._tokens import generate_token, token_sha256
 from pictorio_db.services.auth._validation import check_password, check_username, normalized_username
 from pictorio_db.utils.problems import Problem
+from pictorio_db.utils.time import utc_now
 
 
 class Role(StrEnum):
@@ -52,11 +53,6 @@ class NewToken:
 class Authentication:
     user: UserInfo
     token_id: int
-
-
-def utc_now() -> datetime:
-    """UTC without a time zone attached, as the database stores it."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class AuthService:
@@ -135,7 +131,7 @@ class AuthService:
             user = session.scalars(select(User).where(User.username == username)).one_or_none()
             if not verify_password(user.password_hash if user else None, password):
                 self._login_attempts.record_failure(username, now)
-                raise _not_authenticated()
+                raise not_authenticated()
 
             self._login_attempts.clear(username)
             if needs_rehash(user.password_hash):
@@ -160,7 +156,7 @@ class AuthService:
                 select(ApiToken).where(ApiToken.token_sha256 == token_sha256(token))
             ).one_or_none()
             if api_token is None:
-                raise _not_authenticated()
+                raise not_authenticated()
 
             api_token.last_used_at = self._now()
             user = session.get_one(User, api_token.user_id)
@@ -188,7 +184,7 @@ class AuthService:
         return session.scalar(select(func.count()).select_from(User).where(User.role == Role.ADMIN)) or 0
 
 
-def _not_authenticated() -> Problem:
+def not_authenticated() -> Problem:
     return Problem(
         401,
         "not_authenticated",
