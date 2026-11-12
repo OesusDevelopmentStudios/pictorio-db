@@ -9,6 +9,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from pictorio_db.services.auth import Authentication, AuthService, Role, not_authenticated
+from pictorio_db.services.tags import TagsService
 from pictorio_db.utils.problems import Problem
 
 # auto_error=False: a missing token is answered with our own 401 problem, not FastAPI's error.
@@ -17,6 +18,10 @@ _bearer_token = HTTPBearer(auto_error=False, description="An API token from POST
 
 def auth_service(request: Request) -> AuthService:
     return request.app.state.auth
+
+
+def tags_service(request: Request) -> TagsService:
+    return request.app.state.tags
 
 
 def current_authentication(
@@ -39,5 +44,6 @@ def current_admin(authentication: Annotated[Authentication, Depends(current_auth
 
 
 AuthServiceDependency = Annotated[AuthService, Depends(auth_service)]
+TagsServiceDependency = Annotated[TagsService, Depends(tags_service)]
 CurrentAuthentication = Annotated[Authentication, Depends(current_authentication)]
 CurrentAdmin = Annotated[Authentication, Depends(current_admin)]

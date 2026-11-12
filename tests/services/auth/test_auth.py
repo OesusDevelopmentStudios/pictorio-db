@@ -2,14 +2,12 @@
 # SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios
 
 import re
-from collections.abc import Iterator
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
-from pictorio_db.db import DATABASE_FILE_NAME, Database, open_database
+from pictorio_db.db import Database
 from pictorio_db.db.models import ApiToken, User
 from pictorio_db.services.auth import AuthService, Role
 from pictorio_db.utils.problems import Problem
@@ -30,13 +28,6 @@ class TestClock:
 
     def advance(self, duration: timedelta) -> None:
         self.current += duration
-
-
-@pytest.fixture
-def database(tmp_path: Path) -> Iterator[Database]:
-    opened_database = open_database(tmp_path / DATABASE_FILE_NAME)
-    yield opened_database
-    opened_database.close()
 
 
 @pytest.fixture

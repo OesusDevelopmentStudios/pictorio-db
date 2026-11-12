@@ -16,10 +16,13 @@ from pictorio_db.api import v1
 from pictorio_db.config import Config
 from pictorio_db.db import DATABASE_FILE_NAME, open_database
 from pictorio_db.services.auth import AuthService
+from pictorio_db.services.tags import TagsService
 from pictorio_db.utils.problems import install_problem_handlers
 
 
 _logger = logging.getLogger(__name__)
+
+_PATH_TEMPLATE_NAMESPACES = frozenset({"category", "author"})
 
 
 def create_app(config: Config) -> FastAPI:
@@ -46,6 +49,7 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
         database = open_database(config.data_dir / DATABASE_FILE_NAME)
         app.state.database = database
         app.state.auth = AuthService(database)
+        app.state.tags = TagsService(database, lambda: _PATH_TEMPLATE_NAMESPACES)
         _announce_setup_code(app.state.auth)
         yield
         database.close()
@@ -53,7 +57,6 @@ def _lifespan(config: Config) -> Callable[[FastAPI], AbstractAsyncContextManager
     return lifespan
 
 
-# Whoever can read the server's log owns the server, so the code goes there and nowhere else.
 def _announce_setup_code(auth: AuthService) -> None:
     setup_code = auth.setup_code()
     if setup_code is not None:

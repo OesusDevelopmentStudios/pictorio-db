@@ -11,11 +11,14 @@ from pictorio_db.services.tags._names import (
     normalized_tag_name,
     split_tag,
 )
+from pictorio_db.services.tags._service import NamespaceInfo, TagsService
 
 __all__ = [
     "GENERAL_NAMESPACE",
+    "NamespaceInfo",
     "RESERVED_NAMESPACE_NAMES",
     "TagName",
+    "TagsService",
     "normalized_namespace_name",
     "normalized_tag_name",
     "split_tag",

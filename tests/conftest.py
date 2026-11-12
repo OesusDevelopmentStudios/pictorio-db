@@ -11,11 +11,20 @@ from fastapi.testclient import TestClient
 
 from pictorio_db.app import create_app
 from pictorio_db.config import DEFAULT_HOST, DEFAULT_PORT, Config
+from pictorio_db.db import DATABASE_FILE_NAME, Database, open_database
 
 
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
     return Config(host=DEFAULT_HOST, port=DEFAULT_PORT, data_dir=tmp_path)
+
+
+@pytest.fixture
+def database(tmp_path: Path) -> Iterator[Database]:
+    """A new database with the current schema, for testing a service on its own."""
+    opened_database = open_database(tmp_path / DATABASE_FILE_NAME)
+    yield opened_database
+    opened_database.close()
 
 
 @pytest.fixture
