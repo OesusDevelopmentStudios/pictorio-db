@@ -1,0 +1,32 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+{% extends "base.html" %}
+{% block title %}Setup{% endblock %}
+{% block heading %}Set up pictorio-db{% endblock %}
+{% block content %}
+<p>Create the first admin account. The setup code is in the server's log, e.g.
+<code>podman logs pictorio-db</code>.</p>
+
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+
+<form method="post" action="/admin/setup">
+    <label>Setup code
+        <input name="setup_code" required autocomplete="off" placeholder="XXXX-XXXX-XXXX">
+    </label>
+    <label>Username
+        <input name="username" required autocomplete="username" value="{{ username }}">
+    </label>
+    <span class="hint">Letters a–z, digits, “.”, “_” and “-”.</span>
+    <label>Password
+        <input name="password" type="password" required autocomplete="new-password"
+               minlength="{{ password_min_length }}">
+    </label>
+    <span class="hint">At least {{ password_min_length }} characters.</span>
+    <label>Password again
+        <input name="password_repeated" type="password" required autocomplete="new-password">
+    </label>
+    <button type="submit">Create admin account</button>
+</form>
+{% endblock %}

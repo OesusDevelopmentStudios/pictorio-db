@@ -11,6 +11,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from fastapi import FastAPI
 
 import pictorio_db
+from pictorio_db import admin_web
 from pictorio_db.api import v1
 from pictorio_db.config import Config
 from pictorio_db.db import DATABASE_FILE_NAME, open_database
@@ -34,6 +35,7 @@ def create_app(config: Config) -> FastAPI:
     )
     install_problem_handlers(app)  # every error is answered as RFC 9457 Problem Details
     app.include_router(v1.router)
+    app.include_router(admin_web.router)
     return app
 
 

@@ -1,0 +1,51 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% endblock %} – pictorio-db</title>
+    <style>
+        /* Dark design; color-scheme makes the browser draw its own controls dark too. */
+        :root {
+            color-scheme: dark;
+            --background: #16181d;
+            --surface: #22252c;
+            --border: #3a3f4a;
+            --text: #e6e8eb;
+            --muted-text: #a3a9b4;
+            --accent: #4c8dff;
+            --accent-text: #0b0d10;
+            --error: #e5534b;
+            --error-background: #3b1d1f;
+            --error-text: #f5c6c3;
+        }
+        body {
+            font-family: sans-serif; max-width: 28rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5;
+            background: var(--background); color: var(--text);
+        }
+        a { color: #7ab7ff; }
+        code { background: var(--surface); padding: 0.1rem 0.3rem; border-radius: 3px; }
+        label { display: block; margin-top: 1rem; }
+        input {
+            width: 100%; box-sizing: border-box; padding: 0.4rem; font-size: 1rem;
+            background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px;
+        }
+        input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        button {
+            margin-top: 1.5rem; padding: 0.5rem 1.2rem; font-size: 1rem; cursor: pointer;
+            background: var(--accent); color: var(--accent-text); border: none; border-radius: 4px;
+        }
+        .error {
+            border-left: 4px solid var(--error); background: var(--error-background); color: var(--error-text);
+            padding: 0.5rem 1rem;
+        }
+        .hint { color: var(--muted-text); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <h1>{% block heading %}{% endblock %}</h1>
+    {% block content %}{% endblock %}
+</body>
+</html>

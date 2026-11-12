@@ -36,6 +36,10 @@ pictorio-db serve
 curl http://127.0.0.1:8737/api/v1/server/info
 ```
 
+On the first start the server logs a one-time **setup code**. Open
+<http://127.0.0.1:8737/admin/setup>, enter the code and create the first admin account. Until then,
+the server prints a new code every time it starts.
+
 The interactive API documentation is at <http://127.0.0.1:8737/api/docs>.
 
 | Environment variable | Default | Meaning |

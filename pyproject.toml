@@ -21,6 +21,8 @@ dependencies = [
     "sqlalchemy==2.1.8",  # database access (SQLite)
     "alembic==1.20.1",    # database schema migrations
     "argon2-cffi==25.1.0",  # password hashing (argon2id)
+    "jinja2==3.1.6",            # web admin page templates
+    "python-multipart==0.0.33",  # reads the web admin's HTML forms
 ]
 
 [project.scripts]
@@ -38,6 +40,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "pictorio_db.db" = ["migrations/script.py.mako"]  # template for new migrations
+"pictorio_db.admin_web" = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

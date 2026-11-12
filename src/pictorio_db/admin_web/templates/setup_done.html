@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# SPDX-FileCopyrightText: 2026 OesusDevelopmentStudios #}
+{% extends "base.html" %}
+{% block title %}Setup{% endblock %}
+{% block heading %}pictorio-db is set up{% endblock %}
+{% block content %}
+{% if created_username %}
+<p>The admin account <strong>{{ created_username }}</strong> has been created.</p>
+{% else %}
+<p>An admin account exists already.</p>
+{% endif %}
+<p>Log in with it from the Pictorio app.</p>
+{% endblock %}
